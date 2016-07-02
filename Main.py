@@ -15,6 +15,7 @@ from panda3d.core import Point3
 from panda3d.core import BitMask32
 from panda3d.core import NodePath
 from panda3d.core import PandaNode
+from panda3d.core import TextNode
 
 from panda3d.bullet import BulletWorld
 from panda3d.bullet import BulletHelper
@@ -31,10 +32,11 @@ from panda3d.bullet import BulletTriangleMeshShape
 from panda3d.bullet import BulletSoftBodyNode
 from panda3d.bullet import BulletSoftBodyConfig
 from panda3d.bullet import ZUp
-
+from direct.gui.OnscreenText import OnscreenText
 
 class CharacterController(ShowBase):
     def __init__(self):
+
         ShowBase.__init__(self)
         self.setupLights()
         # Input
@@ -78,6 +80,9 @@ class CharacterController(ShowBase):
         self.isJumping = False
         self.isLanding = False
         self.isDashJumping = False
+        self.isRunningAndJumping = False
+        self.isRunningAndJumpingAndLanding = False
+        self.isLandedFromRun = False
 
         #animation switches
         self.landingAnimation = False
@@ -87,6 +92,33 @@ class CharacterController(ShowBase):
 
         #keyOptions
         self.cameraAutoTurn = True
+
+        # Player stats
+        self.playerLives = 3
+        self.playertScore = 0
+        # self.playerHealth = 3
+
+        #On Screen Texts
+        self.HUDTexts = []
+        #textObject = OnscreenText(text='my text string', style = 1, fg=(1,1,0,1), pos=(-1.3, 0.95), align=TextNode.ALeft, scale=0.07)
+        #destroy text
+        #textObject.destroy()
+        self.displayHUD()
+
+        #Music & Sounds
+        self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
+        self.playMusic(self.BGM1, looping=1)
+        self.SFXjump = self.loadSfx("Resources/Sound/Jump.mp3")
+        self.SFXdashjump = self.loadSfx("Resources/Sound/Dash Jump.mp3")
+        #self.SFXRun = self.loadSfx("Resources/Sound/running.mp3")
+
+    def displayHUD(self):
+        lifeMsg = "Lives: " + str(self.playerLives)
+        textObject1 = OnscreenText(text=lifeMsg, style=1, fg=(1,1,0,1), pos=(-1.3,0.95), align = TextNode.ALeft, scale = 0.06)
+        scoreMsg = "Score: " + str(self.playertScore)
+        textObject2 = OnscreenText(text=scoreMsg, style=1, fg=(1,1,0,1), pos=(0.0,0.95), align = TextNode.ACenter, scale = 0.06)
+        self.HUDTexts.append(textObject1)
+        self.HUDTexts.append((textObject2))
 
     def doExit(self):
         self.cleanup()
@@ -103,9 +135,11 @@ class CharacterController(ShowBase):
             self.debugNP.hide()
 
     def doJump(self):
+        self.isRunningAndJumpingAndLanding = False
         self.character.setMaxJumpHeight(5.0)
         self.character.setJumpSpeed(8.0)
         if self.character.isOnGround():
+            self.playSfx(self.SFXjump)
             self.actorNP.play('jump')
         self.character.doJump()
         self.isJumping = True
@@ -115,6 +149,7 @@ class CharacterController(ShowBase):
         self.character.setJumpSpeed(8.0)
         if self.character.isOnGround():
             self.isDashJumping = True
+            self.playSfx(self.SFXdashjump)
             self.actorNP.play('jump')
         self.character.doJump()
         self.isJumping = True
@@ -127,6 +162,7 @@ class CharacterController(ShowBase):
             speed.setY(speedForce * 2)
             if self.isDashing is False:
                 self.actorNP.setPlayRate(1.5, 'run')
+                self.actorNP.loop('run')
                 self.isDashing = True
         elif inputState.isSet('forward'):
             speed.setY(speedForce)
@@ -136,6 +172,8 @@ class CharacterController(ShowBase):
             self.doDashJump()
             if inputState.isSet('dash') and inputState.isSet('forward') and self.isDashJumping:
                 speed.setY(speedForce * 2)
+                self.isJumping = False
+                self.isDashing = False
         else: self.isDashJumping = False
         if inputState.isSet('reverse'): speed.setY(-speedForce/2)
         if inputState.isSet('left'):    speed.setX(-speedForce)
@@ -189,15 +227,33 @@ class CharacterController(ShowBase):
             self.cdmax += .2
             self.cdmin += .2
         #Atm's animations
-        if (inputState.isSet('forward') or inputState.isSet('reverse') or inputState.isSet('left') or inputState.isSet('right') and self.isMoving is False and self.character.isOnGround()):
+        if (inputState.isSet('forward') or inputState.isSet('reverse') or inputState.isSet('left') or inputState.isSet('right')) and self.character.isOnGround() and self.isLanding is False:
             if self.isMoving is False:
                 self.actorNP.loop('run')
+                #self.playSfx(self.SFXRun)
                 self.isMoving = True
+                self.isJumping = False
+            elif self.isMoving and self.isJumping and self.isRunningAndJumping is False:
+                self.isRunningAndJumping = True
+            elif self.isRunningAndJumping and self.character.isOnGround() and self.isMoving and self.isRunningAndJumpingAndLanding is False:
+                self.isRunningAndJumping = False
+                self.isMoving = False
+                self.isRunningAndJumpingAndLanding = True
+                self.isJumping = False
+                self.isLanding = True
+                self.landingAnimation = True
+                taskMgr.add(self.landingAnimationTask, 'landing')
+            else:
+                pass
+                #self.isRunningAndJumpingAndLanding = False
+
+
         else:
             if self.isMoving and self.character.isOnGround():
                 self.isMoving = False
                 self.actorNP.loop('idle')
             elif self.isJumping and self.character.isOnGround():
+                pass
                 self.isJumping = False
                 self.isLanding = True
                 self.landingAnimation = True
@@ -320,7 +376,7 @@ class CharacterController(ShowBase):
             stairNP.setPos(pos)
             stairNP.setCollideMask(BitMask32.allOn())
 
-            modelNP = loader.loadModel('models//box.egg')
+            modelNP = loader.loadModel('models/box.egg')
             modelNP.reparentTo(stairNP)
             # modelNP.setPos(0, 0, 0)
             modelNP.setPos(-size.x / 2.0, -size.y / 2.0, -size.z / 2.0)
