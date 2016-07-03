@@ -38,6 +38,7 @@ class CharacterController(ShowBase):
     def __init__(self):
 
         ShowBase.__init__(self)
+        self.loadSounds()
         self.setupLights()
         # Input
         self.accept('escape', self.doExit)
@@ -59,6 +60,8 @@ class CharacterController(ShowBase):
         inputState.watchWithModifiers('dashJump', 'space')
         inputState.watchWithModifiers('autoCameraOn', 'p')
         inputState.watchWithModifiers('autoCameraOff', 'o')
+        inputState.watchWithModifiers('helpHud', 'f1')
+        inputState.watchWithModifiers('closeHelpHud', 'f2')
 
         # Task
         taskMgr.add(self.update, 'updateWorld')
@@ -95,30 +98,128 @@ class CharacterController(ShowBase):
 
         # Player stats
         self.playerLives = 3
-        self.playertScore = 0
+        self.playerScore = 0
+        self.switchScoreToLife = False
         # self.playerHealth = 3
 
+        #Pete's switches and other stuff
+        #self.peteIsActive = False
+        self.peteIdentifer = 0
+        self.peteTaskAssigned = False
+
+
         #On Screen Texts
+        self.helpHudOn = False
         self.HUDTexts = []
+        self.helpTexts = []
         #textObject = OnscreenText(text='my text string', style = 1, fg=(1,1,0,1), pos=(-1.3, 0.95), align=TextNode.ALeft, scale=0.07)
-        #destroy text
         #textObject.destroy()
         self.displayHUD()
+        taskMgr.add(self.playerStatsWatcher, "playerStatsMonitor")
+        self.ATMPosX = self.characterNP.getX()
+        self.ATMPosY = self.characterNP.getY()
+        self.ATMPosZ = self.characterNP.getZ()
+        self.ATMPos = "(" + str(self.ATMPosX) + ", " + str(self.ATMPosY) + ", " + str(self.ATMPosZ) + ")"
+        self.ATMPoisitionMonitorText = OnscreenText(text=self.ATMPos, style = 1, fg=(1,1,1,1), pos = (1.3,-0.95), align=TextNode.A_right, scale = 0.08)
+        taskMgr.add(self.ATMPositionMonitor, "playerPositionMonitor")
+        #self.HUDTexts[1].setText("test")
 
         #Music & Sounds
+        #self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
+        #self.playMusic(self.BGM1, looping=1)
+        #self.SFXjump = self.loadSfx("Resources/Sound/Jump.mp3")
+        #self.SFXdashjump = self.loadSfx("Resources/Sound/Dash Jump.mp3")
+        #self.SFXRun = self.loadSfx("Resources/Sound/running.mp3")
+
+    def loadSounds(self):
+        #BGM
         self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
         self.playMusic(self.BGM1, looping=1)
+
+        #sound effects
         self.SFXjump = self.loadSfx("Resources/Sound/Jump.mp3")
         self.SFXdashjump = self.loadSfx("Resources/Sound/Dash Jump.mp3")
-        #self.SFXRun = self.loadSfx("Resources/Sound/running.mp3")
+
+        #voice
+        self.SFXunknown = self.loadSfx("Resources/Voice/unknown.wav")
+
+    def ATMPositionMonitor(self, task):
+        self.ATMPosX = self.characterNP.getX()
+        self.ATMPosY = self.characterNP.getY()
+        self.ATMPosZ = self.characterNP.getZ()
+        self.ATMPos = "(" + str(self.ATMPosX) + ", " + str(self.ATMPosY) + ", " + str(self.ATMPosZ) + ")"
+        self.ATMPoisitionMonitorText.setText(self.ATMPos)
+        return task.cont
+
+    def displayHelpHud(self):
+        self.helpTexts.append(OnscreenText(text= "[W] : Move forward", style=1, fg=(1,1,1,1), pos=(-1.3,0.90), align = TextNode.ALeft, scale = 0.06))
+        self.helpTexts.append(OnscreenText(text="[A] : Rotate left", style=1, fg=(1,1,1,1), pos=(-1.3,0.85), align = TextNode.ALeft, scale = 0.06))
+        self.helpTexts.append(OnscreenText(text="[D] : Rotate Right", style=1, fg=(1,1,1,1), pos=(-1.3,0.80), align = TextNode.ALeft, scale = 0.06))
+        self.helpTexts.append(OnscreenText(text="[S] : Move backward", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.75), align=TextNode.ALeft, scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[Arrow Key Up] : Tilt Camera Down", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.65), align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[Arrow Key Down] : Tilt Camera Up", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.60), align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[Arrow Key Left] : Rotate Camera left", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.55), align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[Arrow Key Right] : Rotate Camera Right", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.50), align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[Q] : Camera Zoom Out", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.45), align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[E] : Camera Zoom In", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.40), align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[Shift] : Dash", style=1, fg=(1, 1, 1, 1), pos=(0, 0.90), align=TextNode.ACenter,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[Space] : Jump", style=1, fg=(1, 1, 1, 1), pos=(0, 0.85), align=TextNode.ACenter,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[P] : Auto Camera Turn - On", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.35), align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[O] : Auto Camera Turn - Off", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.30), align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[F1] : Toggle Help - On", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.20),
+                         align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[F2] : Toggle Help - Off", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.15),
+                         align=TextNode.ALeft,
+                         scale=0.06))
 
     def displayHUD(self):
         lifeMsg = "Lives: " + str(self.playerLives)
-        textObject1 = OnscreenText(text=lifeMsg, style=1, fg=(1,1,0,1), pos=(-1.3,0.95), align = TextNode.ALeft, scale = 0.06)
-        scoreMsg = "Score: " + str(self.playertScore)
-        textObject2 = OnscreenText(text=scoreMsg, style=1, fg=(1,1,0,1), pos=(0.0,0.95), align = TextNode.ACenter, scale = 0.06)
-        self.HUDTexts.append(textObject1)
-        self.HUDTexts.append((textObject2))
+        self.HUDTexts.append(OnscreenText(text=lifeMsg, style=1, fg=(1,1,0,1), pos=(-1.3,0.95), align = TextNode.ALeft, scale = 0.06))
+        scoreMsg = "Score: " + str(self.playerScore)
+        self.HUDTexts.append(OnscreenText(text=scoreMsg, style=1, fg=(1,1,0,1), pos=(0.0,0.95), align = TextNode.ACenter, scale = 0.06))
+        #self.HUDTexts.append(textObject1)
+        #self.HUDTexts.append((textObject2))
+
+    def playerStatsWatcher(self, task):
+        if self.playerScore is not 0 and self.playerScore % 10000 is 0 and self.switchScoreToLife is False:
+            self.switchScoreToLife = True
+            self.updateLife(1)
+        elif self.playerScore % 10000 is not 0:
+            self.switchScoreToLife = False
+        return task.cont
+
+    def updateScore(self, amount):
+        self.playerScore += amount
+        scoreMsg = "Score: " + str(self.playerScore)
+        self.HUDTexts[1].setText(scoreMsg)
+
+    def updateLife(self, amount):
+        self.playerLives += amount
+        lifeMsg = "Lives: " + str(self.playerLives)
+        self.HUDTexts[0].setText(lifeMsg)
 
     def doExit(self):
         self.cleanup()
@@ -136,17 +237,18 @@ class CharacterController(ShowBase):
 
     def doJump(self):
         self.isRunningAndJumpingAndLanding = False
-        self.character.setMaxJumpHeight(5.0)
-        self.character.setJumpSpeed(8.0)
+        self.character.setMaxJumpHeight(6.0)
+        self.character.setJumpSpeed(10.0)
         if self.character.isOnGround():
             self.playSfx(self.SFXjump)
             self.actorNP.play('jump')
+            self.updateScore(100)
         self.character.doJump()
         self.isJumping = True
 
     def doDashJump(self):
         self.character.setMaxJumpHeight(2.0)
-        self.character.setJumpSpeed(8.0)
+        self.character.setJumpSpeed(10.0)
         if self.character.isOnGround():
             self.isDashJumping = True
             self.playSfx(self.SFXdashjump)
@@ -174,7 +276,10 @@ class CharacterController(ShowBase):
                 speed.setY(speedForce * 2)
                 self.isJumping = False
                 self.isDashing = False
-        else: self.isDashJumping = False
+                self.isMoving = False
+            #elif inputState.isSet('dash') and inputState.isSet('forward'):
+
+        #else: self.isDashJumping = False
         if inputState.isSet('reverse'): speed.setY(-speedForce/2)
         if inputState.isSet('left'):    speed.setX(-speedForce)
         if inputState.isSet('right'):   speed.setX(speedForce)
@@ -187,6 +292,14 @@ class CharacterController(ShowBase):
         if inputState.isSet('autoCameraOff'): self.cameraAutoTurn = False
         self.character.setAngularMovement(omega)
         self.character.setLinearMovement(speed, True)
+        if inputState.isSet("helpHud") and self.helpHudOn is False:
+            self.helpHudOn = True
+            self.displayHelpHud()
+        elif inputState.isSet("closeHelpHud") and self.helpHudOn:
+            for text in self.helpTexts:
+                text.destroy()
+            self.helpTexts = []
+            self.helpHudOn = False
 
     def update(self, task):
         dt = globalClock.getDt()
@@ -251,6 +364,7 @@ class CharacterController(ShowBase):
         else:
             if self.isMoving and self.character.isOnGround():
                 self.isMoving = False
+                self.isJumping = False
                 self.actorNP.loop('idle')
             elif self.isJumping and self.character.isOnGround():
                 pass
@@ -263,11 +377,19 @@ class CharacterController(ShowBase):
                 self.actorNP.loop('idle')
 
 
+        #Pete's stuff
+        #print self.peteIsActive
+        if self.peteIsActive and self.peteTaskAssigned is False:
+            self.peteTaskAssigned = True
+            taskMgr.add(self.peteFirstTask, 'firstPeteTask')
+            self.playSfx(self.SFXunknown)
+
         self.floater.setPos(self.characterNP.getPos())
         self.floater.setZ(self.characterNP.getZ() + 1.0)
         base.camera.lookAt(self.floater)
 
         return task.cont
+
     def landingAnimationTask(self, task):
         if self.landingAnimation:
             self.actorNP.play('land')
@@ -330,76 +452,58 @@ class CharacterController(ShowBase):
         self.sphere.setPos(x, y, z)
         self.world.attachRigidBody(node)
 
-        smileyFace = self.loader.loadModel("models/smiley")
+        #models/smiley
+        smileyFace = self.loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/sphere/ball.egg')
         smileyFace.reparentTo(self.sphere)
         smileyFace.setScale(radius)
 
-    def setup(self):
+    def createBox(self, x, y, z, pos, name, fill=""):
+        boxSize = Vec3(x,y,z)
+        shape = BulletBoxShape(boxSize)
+        boxNP = self.render.attachNewNode(BulletRigidBodyNode(name))
+        boxNP.node().addShape(shape)
+        boxNP.setPos(pos)
+        boxNP.setCollideMask(BitMask32.allOn())
+        self.world.attachRigidBody(boxNP.node())
 
-        # World
-        self.debugNP = self.render.attachNewNode(BulletDebugNode('Debug'))
-        self.debugNP.show()
+        if fill is "brick":
+            boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
+            boxModelNP.reparentTo(boxNP)
+            boxModelNP.setPos(0, 0, -z)
+            boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
 
-        self.world = BulletWorld()
-        self.world.setGravity(Vec3(0, 0, -9.81))
-        self.world.setDebugNode(self.debugNP.node())
+    def createPete(self):
+        h = 1
+        w = 1.4
+        shape = BulletCapsuleShape(w, h/2, ZUp)
 
-        # Floor
-        # shape = BulletPlaneShape(Vec3(0, 0, 1), 0)
-        floorPos = Vec3(0, 0, -2)
-        floorSize = Vec3(20, 20, 1)
-        shape = BulletBoxShape(floorSize)
-        floorNP = self.render.attachNewNode(BulletRigidBodyNode('Floor'))
-        floorNP.node().addShape(shape)
-        floorNP.setPos(floorPos)
-        floorNP.setCollideMask(BitMask32.allOn())
-        self.world.attachRigidBody(floorNP.node())
+        self.pete = BulletCharacterControllerNode(shape, 0.4, 'Pete')
+        #    self.character.setMass(1.0)
+        self.peteNP = self.render.attachNewNode(self.pete)
+        self.peteNP.setPos(0, 0, 10)
+        self.peteNP.setH(45)
+        self.peteNP.setCollideMask(BitMask32.allOn())
+        self.world.attachCharacter(self.pete)
 
-        fmodelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-cube/brick.egg')
-        fmodelNP.reparentTo(floorNP)
-        fmodelNP.setPos(0, 0, 0)
-        fmodelNP.setScale(floorSize.x * 2, floorSize.y * 2, floorSize.z)
+        self.peteActorNP = Actor('Resources/Models/ModelCollection/Actors/panda/panda-model.egg', {
+            'walk': 'Resources/Models/ModelCollection/Actors/panda/panda-walk4.egg'})
 
-        self.createFourWalls()
-        self.addBall(3, 'ball1', 3, 6, 10, 20)
-        self.addBall(1.5, 'ball2', 0, 0, 12, 10)
-        self.addBall(.4, 'ball3', 2, 5, 2, 0.001)
-        # Stair
-        origin = Point3(2, 0, 0)
-        size = Vec3(2, 4.75, 1)
-        shape = BulletBoxShape(size * 0.55)
-        for i in range(9):
-            pos = origin + size * i
-            pos.setY(0)
-            stairNP = self.render.attachNewNode(BulletRigidBodyNode('Stair%i' % i))
-            stairNP.node().addShape(shape)
-            stairNP.setPos(pos)
-            stairNP.setCollideMask(BitMask32.allOn())
+        self.peteActorNP.reparentTo(self.peteNP)
+        self.peteActorNP.setScale(0.0035)
+        self.peteActorNP.setH(180)
+        self.peteActorNP.setPos(0, 0, -1.45)
+        self.peteActorNP.loop('walk')
 
-            modelNP = loader.loadModel('models/box.egg')
-            modelNP.reparentTo(stairNP)
-            # modelNP.setPos(0, 0, 0)
-            modelNP.setPos(-size.x / 2.0, -size.y / 2.0, -size.z / 2.0)
-            modelNP.setScale(size)
-            self.world.attachRigidBody(stairNP.node())
+        self.peteIdentifer = 1
+        self.peteIsActive = True
 
-        for i in range(9):
-            pos = origin + size * i
-            pos.setY(0)
-            pos.setX(pos.getX() * -1)
-            stairNP = self.render.attachNewNode(BulletRigidBodyNode('Stair%i' % i))
-            stairNP.node().addShape(shape)
-            stairNP.setPos(pos)
-            stairNP.setCollideMask(BitMask32.allOn())
+    def peteFirstTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 10:
+            self.peteActorNP.lookAt(self.characterNP)
+            self.peteActorNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
+        return task.cont
 
-            modelNP = loader.loadModel('models/box.egg')
-            modelNP.reparentTo(stairNP)
-            modelNP.setPos(-size.x / 2.0, -size.y / 2.0, -size.z / 2.0)
-            modelNP.setScale(size)
-
-            self.world.attachRigidBody(stairNP.node())
-
-        # Character
+    def createATM(self):
         h = 4.25
         w = .6
         shape = BulletCapsuleShape(w, h - 2 * w, ZUp)
@@ -422,11 +526,90 @@ class CharacterController(ShowBase):
         self.actorNP.reparentTo(self.characterNP)
         self.actorNP.setScale(0.2)
         self.actorNP.setH(180)
-        self.actorNP.setPos(0, 0, 0.5)
+        self.actorNP.setPos(0, 0, 0.3)
         self.actorNP.loop('idle')
-        #animationspeed
+        # animationspeed
         self.actorNP.setPlayRate(0.7, 'jump')
         self.actorNP.setPlayRate(0.7, 'land')
+
+    def setup(self):
+
+        # World
+        self.debugNP = self.render.attachNewNode(BulletDebugNode('Debug'))
+        self.debugNP.show()
+
+        self.world = BulletWorld()
+        self.world.setGravity(Vec3(0, 0, -9.81))
+        self.world.setDebugNode(self.debugNP.node())
+
+        # Floor
+        # shape = BulletPlaneShape(Vec3(0, 0, 1), 0)
+        floorPos = Vec3(0, 0, -2)
+        floorSize = Vec3(20, 20, 1)
+        shape = BulletBoxShape(floorSize)
+        floorNP = self.render.attachNewNode(BulletRigidBodyNode('Floor'))
+        floorNP.node().addShape(shape)
+        floorNP.setPos(floorPos)
+        floorNP.setCollideMask(BitMask32.allOn())
+        self.world.attachRigidBody(floorNP.node())
+        #textures brick, brown(disk), cylinder(cloud), ball(metal) nice floor looking texture, spinner
+        fmodelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-cube/brick.egg')
+        fmodelNP.reparentTo(floorNP)
+        fmodelNP.setPos(0, 0, 0)
+        fmodelNP.setScale(floorSize.x * 2, floorSize.y * 2, floorSize.z)
+
+
+        #consider making a class of object box for poision
+        position = Vec3(-6, 6, 2)
+        position2 = Vec3(10,10,2)
+        self.createBox(5, 2, 2, position, "Hello", fill = "brick")
+        self.createBox(2, 2, 2, position2, "Hello2")
+        self.createFourWalls()
+        self.addBall(3, 'ball1', 3, 6, 10, 0.000000000000001)
+        self.addBall(1.5, 'ball2', 0, 0, 12, 10)
+        self.addBall(.4, 'ball3', 2, 5, 2, 0.001)
+        # Stair
+        origin = Point3(2, 0, 0)
+        size = Vec3(2, 4.75, 1)
+        shape = BulletBoxShape(size * 0.55)
+        '''
+        for i in range(9):
+            pos = origin + size * i
+            pos.setY(0)
+            stairNP = self.render.attachNewNode(BulletRigidBodyNode('Stair%i' % i))
+            stairNP.node().addShape(shape)
+            stairNP.setPos(pos)
+            stairNP.setCollideMask(BitMask32.allOn())
+
+            modelNP = loader.loadModel('models/box.egg')
+            modelNP.reparentTo(stairNP)
+            # modelNP.setPos(0, 0, 0)
+            modelNP.setPos(-size.x / 2.0, -size.y / 2.0, -size.z / 2.0)
+            modelNP.setScale(size)
+            self.world.attachRigidBody(stairNP.node())
+        for i in range(9):
+            pos = origin + size * i
+            pos.setY(0)
+            pos.setX(pos.getX() * -1)
+            stairNP = self.render.attachNewNode(BulletRigidBodyNode('Stair%i' % i))
+            stairNP.node().addShape(shape)
+            stairNP.setPos(pos)
+            stairNP.setCollideMask(BitMask32.allOn())
+
+            modelNP = loader.loadModel('models/box.egg')
+            modelNP.reparentTo(stairNP)
+            modelNP.setPos(-size.x / 2.0, -size.y / 2.0, -size.z / 2.0)
+            modelNP.setScale(size)
+
+            self.world.attachRigidBody(stairNP.node())
+        '''
+        # Character
+        self.createATM()
+        self.createPete()
+        #background
+        #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/env.egg')
+        #self.env.reparentTo(render)
+        #self.env.setScale(7000)
 
 
 game = CharacterController()
