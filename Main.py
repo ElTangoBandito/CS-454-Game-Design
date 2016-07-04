@@ -34,6 +34,9 @@ from panda3d.bullet import BulletSoftBodyConfig
 from panda3d.bullet import ZUp
 from direct.gui.OnscreenText import OnscreenText
 
+from math import pi, sin, cos
+from Box import *
+
 class CharacterController(ShowBase):
     def __init__(self):
 
@@ -62,6 +65,7 @@ class CharacterController(ShowBase):
         inputState.watchWithModifiers('autoCameraOff', 'o')
         inputState.watchWithModifiers('helpHud', 'f1')
         inputState.watchWithModifiers('closeHelpHud', 'f2')
+        inputState.watchWithModifiers('respawn', 'f8')
 
         # Task
         taskMgr.add(self.update, 'updateWorld')
@@ -108,6 +112,11 @@ class CharacterController(ShowBase):
         self.peteTaskAssigned = False
 
 
+        #checkpoint
+        self.checkPointTouched = False
+        self.respawnPoint = Vec3(self.characterNP.getX(), self.characterNP.getY(), self.characterNP.getZ())
+        self.respawning = False
+
         #On Screen Texts
         self.helpHudOn = False
         self.HUDTexts = []
@@ -124,6 +133,8 @@ class CharacterController(ShowBase):
         taskMgr.add(self.ATMPositionMonitor, "playerPositionMonitor")
         #self.HUDTexts[1].setText("test")
 
+        #movingplatforms
+
         #Music & Sounds
         #self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
         #self.playMusic(self.BGM1, looping=1)
@@ -139,6 +150,7 @@ class CharacterController(ShowBase):
         #sound effects
         self.SFXjump = self.loadSfx("Resources/Sound/Jump.mp3")
         self.SFXdashjump = self.loadSfx("Resources/Sound/Dash Jump.mp3")
+        self.SFXpop = self.loadSfx("Resources/Sound/Pop.mp3")
 
         #voice
         self.SFXunknown = self.loadSfx("Resources/Voice/unknown.wav")
@@ -194,6 +206,10 @@ class CharacterController(ShowBase):
             OnscreenText(text="[F2] : Toggle Help - Off", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.15),
                          align=TextNode.ALeft,
                          scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[F8] : Respawn at Checkpoint", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.10),
+                         align=TextNode.ALeft,
+                         scale=0.06))
 
     def displayHUD(self):
         lifeMsg = "Lives: " + str(self.playerLives)
@@ -242,7 +258,6 @@ class CharacterController(ShowBase):
         if self.character.isOnGround():
             self.playSfx(self.SFXjump)
             self.actorNP.play('jump')
-            self.updateScore(100)
         self.character.doJump()
         self.isJumping = True
 
@@ -300,6 +315,13 @@ class CharacterController(ShowBase):
                 text.destroy()
             self.helpTexts = []
             self.helpHudOn = False
+
+        #manual respawn
+        if inputState.isSet('respawn') and self.respawning is False and self.playerLives > 1:
+            self.respawning = True
+            self.updateLife(-1)
+            taskMgr.doMethodLater(3, self.checkPointRespawnTask, 'manual respawn')
+            self.characterNP.setPos(self.respawnPoint)
 
     def update(self, task):
         dt = globalClock.getDt()
@@ -360,7 +382,6 @@ class CharacterController(ShowBase):
                 pass
                 #self.isRunningAndJumpingAndLanding = False
 
-
         else:
             if self.isMoving and self.character.isOnGround():
                 self.isMoving = False
@@ -383,6 +404,13 @@ class CharacterController(ShowBase):
             self.peteTaskAssigned = True
             taskMgr.add(self.peteFirstTask, 'firstPeteTask')
             self.playSfx(self.SFXunknown)
+
+        #checkpoints
+        if self.checkPointTouched is False and self.checkpoint.getDistance(self.characterNP) <= 2:
+            self.checkPointTouched = True
+            taskMgr.add(self.checkPointSpinTask, 'checkpoint1task', extraArgs=[self.checkpoint], appendTask = True)
+            self.respawnPoint = self.checkpointPhysical.getPos()
+
 
         self.floater.setPos(self.characterNP.getPos())
         self.floater.setZ(self.characterNP.getZ() + 1.0)
@@ -457,8 +485,67 @@ class CharacterController(ShowBase):
         smileyFace.reparentTo(self.sphere)
         smileyFace.setScale(radius)
 
-    def createBox(self, x, y, z, pos, name, fill=""):
+    def createCoin(self, pos, name):
+        shape = BulletSphereShape(3)
+        node = BulletRigidBodyNode(name)
+        node.setMass(0)
+        node.addShape(shape)
+        coin = self.render.attachNewNode(node)
+        coin.setPos(pos)
+        smileyFace = self.loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/smiley/smiley.egg')
+        smileyFace.reparentTo(coin)
+        smileyFace.setScale(1)
+        taskMgr.add(self.coinSpinTask, "coinTask1", extraArgs=[coin, smileyFace, node], appendTask = True)
+
+    def coinSpinTask(self, coin, coinPos, node, task):
+        angleDegrees = task.time * 6.0
+        angleRadians = angleDegrees * (pi / 180.0)
+        # self.camera.setPos(20 * sin(angleRadians), -20.0 * cos(angleRadians), 3)
+        coin.setHpr(angleDegrees * 15, 0, 0)
+        if coinPos.getDistance(self.characterNP) <= 2:
+            node.removeAllChildren()
+            self.updateScore(100)
+            self.playSfx(self.SFXpop)
+            return task.done
+        return task.cont
+
+    def createBox(self, box, fill=""):
+        boxSize = box.getSize()
+        shape = BulletBoxShape(boxSize)
+        boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
+        boxNP.node().addShape(shape)
+        boxNP.setPos(box.getPosition())
+        boxNP.setCollideMask(BitMask32.allOn())
+        self.world.attachRigidBody(boxNP.node())
+
+        if fill is "brick":
+            boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
+            boxModelNP.reparentTo(boxNP)
+            boxModelNP.setPos(0, 0, - boxSize.z)
+            boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+
+    def createMovingPlatform(self, x, y, z, pos, name):
         boxSize = Vec3(x,y,z)
+        shape = BulletBoxShape(boxSize)
+        boxNP = BulletRigidBodyNode(name)
+        boxNP.setMass(99999999999)
+        boxNP.addShape(shape)
+        boxNP.setGravity(Vec3(0,0,0))
+        box = self.render.attachNewNode(boxNP)
+        box.setPos(pos)
+        #box.setCollideMask(BitMask32.allOff())
+        self.world.attachRigidBody(boxNP)
+        self.movingPlatformTest = boxNP
+        self.movingPlatformTestModel = box
+        #self.world.removeRigidBody(boxNP)
+
+    def movingPlatformTestTask(self, startPos, task):
+        #speed = Vec3(0, 0.1, 0.2)
+        self.movingPlatformTest.setLinearVelocity(Vec3(0, 1, 0))
+        return task.cont
+
+    def createCheckPoint(self, pos, name):
+        boxSize = Vec3(0, 0, 0)
         shape = BulletBoxShape(boxSize)
         boxNP = self.render.attachNewNode(BulletRigidBodyNode(name))
         boxNP.node().addShape(shape)
@@ -466,11 +553,23 @@ class CharacterController(ShowBase):
         boxNP.setCollideMask(BitMask32.allOn())
         self.world.attachRigidBody(boxNP.node())
 
-        if fill is "brick":
-            boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
-            boxModelNP.reparentTo(boxNP)
-            boxModelNP.setPos(0, 0, -z)
-            boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+        boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/spinner/spinner.egg')
+        boxModelNP.reparentTo(boxNP)
+        boxModelNP.setPos(0, 0, 0)
+        boxModelNP.setScale(0.2, 0.2, 0.4)
+        self.checkpoint = boxModelNP
+        self.checkpointPhysical = boxNP
+
+    def checkPointSpinTask(self, checkPoint, task):
+        angleDegrees = task.time * 6.0
+        angleRadians = angleDegrees * (pi / 180.0)
+        #self.camera.setPos(20 * sin(angleRadians), -20.0 * cos(angleRadians), 3)
+        checkPoint.setHpr(angleDegrees * 100, 0, 0)
+        return task.cont
+
+    def checkPointRespawnTask(self, task):
+        self.respawning = False
+        return task.done
 
     def createPete(self):
         h = 1
@@ -509,7 +608,7 @@ class CharacterController(ShowBase):
         shape = BulletCapsuleShape(w, h - 2 * w, ZUp)
 
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
-        #    self.character.setMass(1.0)
+        #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
         self.characterNP.setPos(-2, 0, 20)
         self.characterNP.setH(45)
@@ -542,6 +641,8 @@ class CharacterController(ShowBase):
         self.world.setGravity(Vec3(0, 0, -9.81))
         self.world.setDebugNode(self.debugNP.node())
 
+        self.createATM()
+        self.createPete()
         # Floor
         # shape = BulletPlaneShape(Vec3(0, 0, 1), 0)
         floorPos = Vec3(0, 0, -2)
@@ -558,16 +659,33 @@ class CharacterController(ShowBase):
         fmodelNP.setPos(0, 0, 0)
         fmodelNP.setScale(floorSize.x * 2, floorSize.y * 2, floorSize.z)
 
+        #Bozes
+        testBox = Box(5, 2, 2, -6, 6, 2, "hello")
+        testBox2 = Box(2, 2, 2, 10, 10, 2, "hello2")
+        self.createBox(testBox, fill = "brick")
+        self.createBox(testBox2, fill = "")
+        #position = Vec3(-6, 6, 2)
+        #position2 = Vec3(10,10,2)
+        #self.createBox(5, 2, 2, position, "Hello", fill = "brick")
+        #self.createBox(2, 2, 2, position2, "Hello2")
 
-        #consider making a class of object box for poision
-        position = Vec3(-6, 6, 2)
-        position2 = Vec3(10,10,2)
-        self.createBox(5, 2, 2, position, "Hello", fill = "brick")
-        self.createBox(2, 2, 2, position2, "Hello2")
         self.createFourWalls()
         self.addBall(3, 'ball1', 3, 6, 10, 0.000000000000001)
-        self.addBall(1.5, 'ball2', 0, 0, 12, 10)
+        self.addBall(1.5, 'ball2', 0, 0, 5, 10)
         self.addBall(.4, 'ball3', 2, 5, 2, 0.001)
+
+        #coins
+        positionCoin = Vec3(3, -6, 3)
+        self.createCoin(positionCoin, "coin1")
+        positionCoin = Vec3(3, -9, 3)
+        self.createCoin(positionCoin, "coin2")
+        positionCoin = Vec3(3, -12, 3)
+        self.createCoin(positionCoin, "coin2")
+
+        #moving platform NOT WORKING ATM
+        positionMP = Vec3(4, -6, 5)
+        self.createMovingPlatform(3, 3, 1, positionMP, 'moving playform 1')
+        taskMgr.add(self.movingPlatformTestTask, 'testingMove', extraArgs=[positionMP], appendTask = True)
         # Stair
         origin = Point3(2, 0, 0)
         size = Vec3(2, 4.75, 1)
@@ -604,8 +722,8 @@ class CharacterController(ShowBase):
             self.world.attachRigidBody(stairNP.node())
         '''
         # Character
-        self.createATM()
-        self.createPete()
+        checkpointpos = Vec3(4, 2, 0)
+        self.createCheckPoint(checkpointpos, 'testcheck')
         #background
         #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/env.egg')
         #self.env.reparentTo(render)
