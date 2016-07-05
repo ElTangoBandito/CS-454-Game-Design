@@ -26,6 +26,7 @@ from panda3d.bullet import BulletDebugNode
 from panda3d.bullet import BulletSphereShape
 from panda3d.bullet import BulletCapsuleShape
 from panda3d.bullet import BulletCharacterControllerNode
+from panda3d.bullet import BulletGhostNode
 from panda3d.bullet import BulletHeightfieldShape
 from panda3d.bullet import BulletTriangleMesh
 from panda3d.bullet import BulletTriangleMeshShape
@@ -47,6 +48,7 @@ class CharacterController(ShowBase):
         self.accept('escape', self.doExit)
         self.accept('r', self.doReset)
         self.accept('f3', self.toggleDebug)
+        #self.accept('space', self.doJump)
         self.accept('space', self.doJump)
 
         inputState.watchWithModifiers('forward', 'w')
@@ -92,6 +94,11 @@ class CharacterController(ShowBase):
         self.isLandedFromRun = False
 
         #animation switches
+        self.firstSpawned = True
+        self.animationRunning = False
+        self.animationDashing = False
+        self.animationIdle = False
+        self.animationLanding = False
         self.landingAnimation = False
         self.isDashing = False
         self.cdmax = 20
@@ -250,7 +257,7 @@ class CharacterController(ShowBase):
             self.debugNP.show()
         else:
             self.debugNP.hide()
-
+    '''
     def doJump(self):
         self.isRunningAndJumpingAndLanding = False
         self.character.setMaxJumpHeight(6.0)
@@ -270,11 +277,25 @@ class CharacterController(ShowBase):
             self.actorNP.play('jump')
         self.character.doJump()
         self.isJumping = True
+    '''
+    def doJump(self):
+        self.character.setMaxJumpHeight(6.0)
+        self.character.setJumpSpeed(10.0)
+        if self.character.isOnGround():
+            self.playSfx(self.SFXjump)
+            self.actorNP.play('jump')
+            self.animationDashing = False
+            self.animationRunning = False
+            self.animationIdle = False
+            #self.isLanding = True
+        self.character.doJump()
 
     def processInput(self, dt):
         speed = Vec3(0, 0, 0)
         omega = 0.0
         speedForce = 5.0
+
+        '''
         if inputState.isSet('dash') and inputState.isSet('forward') and self.character.isOnGround():
             speed.setY(speedForce * 2)
             if self.isDashing is False:
@@ -289,10 +310,50 @@ class CharacterController(ShowBase):
             self.doDashJump()
             if inputState.isSet('dash') and inputState.isSet('forward') and self.isDashJumping:
                 speed.setY(speedForce * 2)
-                self.isJumping = False
+                #self.isJumping = False
                 self.isDashing = False
                 self.isMoving = False
+            elif self.isDashJumping is False:
+                speed.setY(speedForce)
             #elif inputState.isSet('dash') and inputState.isSet('forward'):
+        '''
+        #idle
+        if (inputState.isSet('forward') is False) and (inputState.isSet('reverse') is False) and self.character.isOnGround() and self.animationIdle is False and self.isLanding is False:
+            self.actorNP.loop('idle')
+            self.animationIdle = True
+            self.animationRunning = False
+            self.animationDashing = False
+            self.landingAnimation = False
+        if self.character.isOnGround() is False and self.isLanding is False:
+            self.isLanding = True
+        if self.character.isOnGround() and self.animationLanding is False and self.isLanding:
+            self.animationLanding = True
+            taskMgr.add(self.landingAnimationTask, 'LandingAnimation')
+        #dashing and running on ground
+
+        if (inputState.isSet("forward") or inputState.isSet('reverse')):
+            if inputState.isSet('dash'):
+                if self.character.isOnGround():
+                    speed.setY(speedForce * 2)
+                if self.animationDashing is False and self.character.isOnGround() and self.isLanding is False:
+                    self.actorNP.setPlayRate(1.5, 'run')
+                    self.actorNP.loop('run')
+                    self.landingAnimation = False
+                    self.animationDashing = True
+                    self.animationRunning = False
+                    self.animationIdle = False
+                if inputState.isSet('dashJump'):
+                    speed.setY(speedForce * 2)
+                    self.doJump()
+            else:
+                speed.setY(speedForce)
+                self.actorNP.setPlayRate(1, 'run')
+                if self.animationRunning is False and self.character.isOnGround() and self.isLanding is False:
+                    self.actorNP.loop('run')
+                    self.landingAnimation = False
+                    self.animationIdle = False
+                    self.animationRunning = True
+                    self.animationDashing = False
 
         #else: self.isDashJumping = False
         if inputState.isSet('reverse'): speed.setY(-speedForce/2)
@@ -362,6 +423,7 @@ class CharacterController(ShowBase):
             self.cdmax += .2
             self.cdmin += .2
         #Atm's animations
+        '''
         if (inputState.isSet('forward') or inputState.isSet('reverse') or inputState.isSet('left') or inputState.isSet('right')) and self.character.isOnGround() and self.isLanding is False:
             if self.isMoving is False:
                 self.actorNP.loop('run')
@@ -388,7 +450,6 @@ class CharacterController(ShowBase):
                 self.isJumping = False
                 self.actorNP.loop('idle')
             elif self.isJumping and self.character.isOnGround():
-                pass
                 self.isJumping = False
                 self.isLanding = True
                 self.landingAnimation = True
@@ -396,7 +457,7 @@ class CharacterController(ShowBase):
             elif self.isLanding is False and taskMgr.hasTaskNamed('landing'):
                 taskMgr.remove('landing')
                 self.actorNP.loop('idle')
-
+        '''
 
         #Pete's stuff
         #print self.peteIsActive
@@ -419,6 +480,19 @@ class CharacterController(ShowBase):
         return task.cont
 
     def landingAnimationTask(self, task):
+        if self.landingAnimation is False:
+            self.actorNP.play('land')
+            self.landingAnimation = True
+            self.animationIdle = False
+            self.animationRunning = False
+            self.animationDashing = False
+        if task.time >= 0.3 and self.isLanding:
+            self.isLanding = False
+            self.animationLanding = False
+            return task.done
+        return task.cont
+    '''
+    def landingAnimationTask(self, task):
         if self.landingAnimation:
             self.actorNP.play('land')
             self.landingAnimation = False
@@ -426,7 +500,7 @@ class CharacterController(ShowBase):
 
             self.isLanding = False
         return task.cont
-
+    '''
     def cleanup(self):
         self.world = None
         self.render.removeNode()
@@ -509,6 +583,17 @@ class CharacterController(ShowBase):
             return task.done
         return task.cont
 
+    def createSlide(self, box, h):
+        boxSize = box.getSize()
+        shape = BulletBoxShape(boxSize)
+        boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
+        boxNP.node().addShape(shape)
+        boxNP.setR(-50)
+        boxNP.setH(h)
+        boxNP.setPos(box.getPosition())
+        boxNP.setCollideMask(BitMask32.allOn())
+        self.world.attachRigidBody(boxNP.node())
+
     def createBox(self, box, fill=""):
         boxSize = box.getSize()
         shape = BulletBoxShape(boxSize)
@@ -527,6 +612,7 @@ class CharacterController(ShowBase):
     def createMovingPlatform(self, x, y, z, pos, name):
         boxSize = Vec3(x,y,z)
         shape = BulletBoxShape(boxSize)
+        #boxNP = BulletGhostNode(name)
         boxNP = BulletRigidBodyNode(name)
         boxNP.setMass(99999999999)
         boxNP.addShape(shape)
@@ -535,6 +621,7 @@ class CharacterController(ShowBase):
         box.setPos(pos)
         #box.setCollideMask(BitMask32.allOff())
         self.world.attachRigidBody(boxNP)
+        #self.world.attachGhost(boxNP)
         self.movingPlatformTest = boxNP
         self.movingPlatformTestModel = box
         #self.world.removeRigidBody(boxNP)
@@ -659,15 +746,15 @@ class CharacterController(ShowBase):
         fmodelNP.setPos(0, 0, 0)
         fmodelNP.setScale(floorSize.x * 2, floorSize.y * 2, floorSize.z)
 
-        #Bozes
+        #Boxes
         testBox = Box(5, 2, 2, -6, 6, 2, "hello")
         testBox2 = Box(2, 2, 2, 10, 10, 2, "hello2")
         self.createBox(testBox, fill = "brick")
         self.createBox(testBox2, fill = "")
-        #position = Vec3(-6, 6, 2)
-        #position2 = Vec3(10,10,2)
-        #self.createBox(5, 2, 2, position, "Hello", fill = "brick")
-        #self.createBox(2, 2, 2, position2, "Hello2")
+
+        #slider
+        testSlide = Box(8, 3, 1, -6, -6, 8, "testSlide")
+        self.createSlide(testSlide, 5)
 
         self.createFourWalls()
         self.addBall(3, 'ball1', 3, 6, 10, 0.000000000000001)
