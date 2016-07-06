@@ -25,6 +25,7 @@ from panda3d.bullet import BulletRigidBodyNode
 from panda3d.bullet import BulletDebugNode
 from panda3d.bullet import BulletSphereShape
 from panda3d.bullet import BulletCapsuleShape
+from panda3d.bullet import BulletCylinderShape
 from panda3d.bullet import BulletCharacterControllerNode
 from panda3d.bullet import BulletGhostNode
 from panda3d.bullet import BulletHeightfieldShape
@@ -90,22 +91,21 @@ class CharacterController(ShowBase):
         self.floater.reparentTo(render)
 
         #ATM state
-        self.isMoving = False
-        self.isJumping = False
+        #self.isMoving = False
+        #self.isJumping = False
         self.isLanding = False
         self.isDashJumping = False
-        self.isRunningAndJumping = False
-        self.isRunningAndJumpingAndLanding = False
-        self.isLandedFromRun = False
+        #self.isRunningAndJumping = False
+        #self.isRunningAndJumpingAndLanding = False
+        #self.isLandedFromRun = False
 
         #animation switches
-        self.firstSpawned = True
         self.animationRunning = False
         self.animationDashing = False
         self.animationIdle = False
         self.animationLanding = False
         self.landingAnimation = False
-        self.isDashing = False
+        #self.isDashing = False
         self.cdmax = 20
         self.cdmin = 10
 
@@ -126,9 +126,11 @@ class CharacterController(ShowBase):
 
 
         #checkpoint
-        self.checkPointTouched = False
         self.respawnPoint = Vec3(self.characterNP.getX(), self.characterNP.getY(), self.characterNP.getZ())
         self.respawning = False
+        self.checkPointDict = {
+            "stage1-checkpoint-1" : False
+        }
 
         #On Screen Texts
         self.helpHudOn = False
@@ -401,10 +403,11 @@ class CharacterController(ShowBase):
 
 
         #additional controls
-        if inputState.isSet('autoCameraOn'): self.cameraAutoTurn = True
-        if inputState.isSet('autoCameraOff'): self.cameraAutoTurn = False
         self.character.setAngularMovement(omega)
         self.character.setLinearMovement(speed, True)
+
+        if inputState.isSet('autoCameraOn'): self.cameraAutoTurn = True
+        if inputState.isSet('autoCameraOff'): self.cameraAutoTurn = False
         if inputState.isSet("helpHud") and self.helpHudOn is False:
             self.helpHudOn = True
             self.displayHelpHud()
@@ -503,14 +506,10 @@ class CharacterController(ShowBase):
             taskMgr.add(self.peteFirstTask, 'firstPeteTask')
 
         #checkpoints
-        if self.checkPointTouched is False and self.checkpoint.getDistance(self.characterNP) <= 2:
-            self.checkPointTouched = True
-            taskMgr.add(self.checkPointSpinTask, 'checkpoint1task', extraArgs=[self.checkpoint], appendTask = True)
-            self.respawnPoint = self.checkpointPhysical.getPos()
-
 
         self.floater.setPos(self.characterNP.getPos())
         self.floater.setZ(self.characterNP.getZ() + 1.0)
+        #base.camera.setZ(self.characterNP.getZ() + 5)
         base.camera.lookAt(self.floater)
 
         return task.cont
@@ -597,7 +596,7 @@ class CharacterController(ShowBase):
         return sphere
 
     def createCoin(self, pos, name):
-        shape = BulletSphereShape(3)
+        shape = BulletSphereShape(0.6)
         node = BulletRigidBodyNode(name)
         node.setMass(0)
         node.addShape(shape)
@@ -613,7 +612,9 @@ class CharacterController(ShowBase):
         angleRadians = angleDegrees * (pi / 180.0)
         # self.camera.setPos(20 * sin(angleRadians), -20.0 * cos(angleRadians), 3)
         coin.setHpr(angleDegrees * 15, 0, 0)
-        if coinPos.getDistance(self.characterNP) <= 2:
+        collisions = self.world.contactTestPair(coin.node(), self.character)
+        #if coinPos.getDistance(self.characterNP) <= 2:
+        if len(collisions.getContacts()) > 0:
             node.removeAllChildren()
             self.updateScore(100)
             self.playSfx(self.SFXpop)
@@ -674,24 +675,6 @@ class CharacterController(ShowBase):
             print modelName
             return "No model under that name"
 
-    def createObjective(self, box, name, tracker, ballPos, test=False):
-        boxSize = box.getSize()
-        shape = BulletBoxShape(boxSize)
-        boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
-        boxNP.node().addShape(shape)
-        boxNP.setPos(box.getPosition())
-        boxNP.setCollideMask(BitMask32.allOff())
-        self.world.attachRigidBody(boxNP.node())
-        if test:
-            boxModelNP = self.loadModel('brick')
-            boxModelNP.reparentTo(boxNP)
-            boxModelNP.setPos(0, 0, - boxSize.z)
-            boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
-
-        sphere = self.addBall(1, name, ballPos.x, ballPos.y, ballPos.z, 1)
-        result = [boxNP, sphere]
-        return result
-
     def createMovingPlatform(self, x, y, z, pos, name):
         boxSize = Vec3(x,y,z)
         shape = BulletBoxShape(boxSize)
@@ -727,14 +710,18 @@ class CharacterController(ShowBase):
         boxModelNP.reparentTo(boxNP)
         boxModelNP.setPos(0, 0, 0)
         boxModelNP.setScale(0.2, 0.2, 0.4)
-        self.checkpoint = boxModelNP
-        self.checkpointPhysical = boxNP
+        taskMgr.add(self.checkPointSpinTask, name, extraArgs=[boxNP, boxModelNP, name], appendTask=True)
 
-    def checkPointSpinTask(self, checkPoint, task):
-        angleDegrees = task.time * 6.0
-        angleRadians = angleDegrees * (pi / 180.0)
-        #self.camera.setPos(20 * sin(angleRadians), -20.0 * cos(angleRadians), 3)
-        checkPoint.setHpr(angleDegrees * 100, 0, 0)
+    def checkPointSpinTask(self, boxNP, checkPoint, name, task):
+
+        collision = self.world.contactTestPair(boxNP.node(), self.character)
+        if len(collision.getContacts()) > 0:
+            self.checkPointDict[name] = True
+            self.respawnPoint = boxNP.getPos()
+        if self.checkPointDict[name]:
+            angleDegrees = task.time * 6.0
+        #angleRadians = angleDegrees * (pi / 180.0)
+            checkPoint.setHpr(angleDegrees * 100, 0, 0)
         return task.cont
 
     def checkPointRespawnTask(self, task):
@@ -778,12 +765,12 @@ class CharacterController(ShowBase):
     def createATM(self):
         h = 4.25
         w = .6
-        shape = BulletCapsuleShape(w, h - 2 * w, ZUp)
+        shape = BulletCylinderShape(w, h + w - 0.70, ZUp)
 
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        self.characterNP.setPos(11, 50, 5)
+        self.characterNP.setPos(10, 70, 5)
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
@@ -798,7 +785,7 @@ class CharacterController(ShowBase):
         self.actorNP.reparentTo(self.characterNP)
         self.actorNP.setScale(0.2)
         self.actorNP.setH(180)
-        self.actorNP.setPos(0, 0, 0.3)
+        self.actorNP.setPos(0, 0, 0.4)
         self.actorNP.loop('idle')
         # animationspeed
         self.actorNP.setPlayRate(0.7, 'jump')
@@ -816,8 +803,29 @@ class CharacterController(ShowBase):
                                                 keyBallPosition, test=False)
         taskMgr.add(self.objectiveDestroyBox, 'name', extraArgs=[stage1Objective1[0], stage1Objective1[1], target], appendTask=True)
 
+    def createObjective(self, box, name, tracker, ballPos, test=False):
+        boxSize = box.getSize()
+        shape = BulletBoxShape(boxSize)
+        boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
+        boxNP.node().addShape(shape)
+        boxNP.setPos(box.getPosition())
+        boxNP.setCollideMask(BitMask32.allOff())
+        self.world.attachRigidBody(boxNP.node())
+        if test:
+            boxModelNP = self.loadModel('brick')
+            boxModelNP.reparentTo(boxNP)
+            boxModelNP.setPos(0, 0, - boxSize.z)
+            boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+
+        sphere = self.addBall(1, name, ballPos.x, ballPos.y, ballPos.z, 1)
+        result = [boxNP, sphere]
+        return result
+
     def objectiveDestroyBox(self, box, sphere, target, task):
-        if box.getDistance(sphere) <= 3:
+        collisions = self.world.contactTestPair(box.node(), sphere.node())
+        #print len(collisions.getContacts())
+        #if box.getDistance(sphere) <= 3:
+        if len(collisions.getContacts()) > 0:
             # self.updateLife(1)
             self.playSfx(self.SFXclick)
             self.playMusic(self.BGM2, looping=1)
@@ -926,9 +934,10 @@ class CharacterController(ShowBase):
 
             self.world.attachRigidBody(stairNP.node())
         '''
-        # Character
+
+        #checkpoint
         checkpointpos = Vec3(4, 2, 0)
-        self.createCheckPoint(checkpointpos, 'testcheck')
+        self.createCheckPoint(checkpointpos, 'stage1-checkpoint-1')
 
         #background
         #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/env.egg')
