@@ -69,6 +69,11 @@ class CharacterController(ShowBase):
         inputState.watchWithModifiers('closeHelpHud', 'f2')
         inputState.watchWithModifiers('respawn', 'f8')
 
+        #Stages
+        self.stage1 = []
+        #Objectives
+        self.stage1Objective = {}
+
         # Task
         taskMgr.add(self.update, 'updateWorld')
 
@@ -117,6 +122,7 @@ class CharacterController(ShowBase):
         #self.peteIsActive = False
         self.peteIdentifer = 0
         self.peteTaskAssigned = False
+        self.peteFirstTaskUnknownSFX = False
 
 
         #checkpoint
@@ -149,15 +155,42 @@ class CharacterController(ShowBase):
         #self.SFXdashjump = self.loadSfx("Resources/Sound/Dash Jump.mp3")
         #self.SFXRun = self.loadSfx("Resources/Sound/running.mp3")
 
+    #Stage1Stuff
+    def generateStage(self, fileName):
+        counter = 1
+        with open(fileName) as inputFile:
+            for line in inputFile:
+                parameters = []
+                for value in line.strip().split(','):
+                    parameters.append(value.strip())
+                x = float(parameters[0])
+                y = float(parameters[1])
+                z = float(parameters[2])
+                px = float(parameters[3])
+                py = float(parameters[4])
+                pz = float(parameters[5])
+                blockName = fileName.replace('.txt', "") + "-" + str(counter)
+                counter = counter + 1
+                box = Box(x,y,z,px,py,pz, blockName)
+                model = parameters[6]
+                self.createBox(box, model)
+
+    def appendToStage(self, x, y, z, px, py, pz, name):
+        box = Box(x, y, z, px, py, pz, name)
+        self.stage1.append(box)
+
     def loadSounds(self):
         #BGM
         self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
+        self.BGM2 = self.loadMusic("Resources/BGM/Bramble Blast (Remix).mp3")
         self.playMusic(self.BGM1, looping=1)
 
         #sound effects
         self.SFXjump = self.loadSfx("Resources/Sound/Jump.mp3")
         self.SFXdashjump = self.loadSfx("Resources/Sound/Dash Jump.mp3")
         self.SFXpop = self.loadSfx("Resources/Sound/Pop.mp3")
+        self.SFXclick = self.loadSfx("Resources/Sound/Click.mp3")
+        self.SFXlifeUp = self.loadSfx("Resources/Sound/Life Up.wav")
 
         #voice
         self.SFXunknown = self.loadSfx("Resources/Voice/unknown.wav")
@@ -240,6 +273,8 @@ class CharacterController(ShowBase):
         self.HUDTexts[1].setText(scoreMsg)
 
     def updateLife(self, amount):
+        if amount > 0:
+            self.playSfx(self.SFXlifeUp)
         self.playerLives += amount
         lifeMsg = "Lives: " + str(self.playerLives)
         self.HUDTexts[0].setText(lifeMsg)
@@ -280,7 +315,7 @@ class CharacterController(ShowBase):
     '''
     def doJump(self):
         self.character.setMaxJumpHeight(6.0)
-        self.character.setJumpSpeed(10.0)
+        self.character.setJumpSpeed(11.0)
         if self.character.isOnGround():
             self.playSfx(self.SFXjump)
             self.actorNP.play('jump')
@@ -342,10 +377,12 @@ class CharacterController(ShowBase):
                     self.animationDashing = True
                     self.animationRunning = False
                     self.animationIdle = False
-                if inputState.isSet('dashJump'):
+                    self.isDashJumping = True
+                if inputState.isSet('dashJump') and self.isDashJumping:
                     speed.setY(speedForce * 2)
                     self.doJump()
             else:
+                self.isDashJumping = False
                 speed.setY(speedForce)
                 self.actorNP.setPlayRate(1, 'run')
                 if self.animationRunning is False and self.character.isOnGround() and self.isLanding is False:
@@ -464,7 +501,6 @@ class CharacterController(ShowBase):
         if self.peteIsActive and self.peteTaskAssigned is False:
             self.peteTaskAssigned = True
             taskMgr.add(self.peteFirstTask, 'firstPeteTask')
-            self.playSfx(self.SFXunknown)
 
         #checkpoints
         if self.checkPointTouched is False and self.checkpoint.getDistance(self.characterNP) <= 2:
@@ -550,14 +586,15 @@ class CharacterController(ShowBase):
         node = BulletRigidBodyNode(name)
         node.setMass(mass)
         node.addShape(shape)
-        self.sphere = self.render.attachNewNode(node)
-        self.sphere.setPos(x, y, z)
+        sphere = self.render.attachNewNode(node)
+        sphere.setPos(x, y, z)
         self.world.attachRigidBody(node)
 
         #models/smiley
         smileyFace = self.loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/sphere/ball.egg')
-        smileyFace.reparentTo(self.sphere)
+        smileyFace.reparentTo(sphere)
         smileyFace.setScale(radius)
+        return sphere
 
     def createCoin(self, pos, name):
         shape = BulletSphereShape(3)
@@ -583,7 +620,7 @@ class CharacterController(ShowBase):
             return task.done
         return task.cont
 
-    def createSlide(self, box, h):
+    def createSlide(self, box, h, modelName):
         boxSize = box.getSize()
         shape = BulletBoxShape(boxSize)
         boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
@@ -594,7 +631,12 @@ class CharacterController(ShowBase):
         boxNP.setCollideMask(BitMask32.allOn())
         self.world.attachRigidBody(boxNP.node())
 
-    def createBox(self, box, fill=""):
+        boxModelNP = self.loadModel(modelName)
+        boxModelNP.reparentTo(boxNP)
+        boxModelNP.setPos(0, 0, - boxSize.z)
+        boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+
+    def createBox(self, box, modelName):
         boxSize = box.getSize()
         shape = BulletBoxShape(boxSize)
         boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
@@ -603,11 +645,52 @@ class CharacterController(ShowBase):
         boxNP.setCollideMask(BitMask32.allOn())
         self.world.attachRigidBody(boxNP.node())
 
-        if fill is "brick":
-            boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
+        #boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
+        boxModelNP = self.loadModel(modelName)
+        if boxModelNP == "No model under that name":
+            pass
+        else:
             boxModelNP.reparentTo(boxNP)
             boxModelNP.setPos(0, 0, - boxSize.z)
             boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+        return boxNP
+        # boxNP.node().removeAllChildren()
+        # self.world.removeRigidBody(boxNP.node())
+
+    def loadModel(self, modelName):
+        if modelName == 'brick':
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-cube/brick.egg')
+        elif modelName == 'iron':
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-iron/brick.egg')
+        elif modelName == 'sand':
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
+        elif modelName == 'stone':
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-stone/brick.egg')
+        elif modelName == 'stone2':
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-stone2/brick.egg')
+        elif modelName == 'stone3':
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/stone-cube/stone.egg')
+        else:
+            print modelName
+            return "No model under that name"
+
+    def createObjective(self, box, name, tracker, ballPos, test=False):
+        boxSize = box.getSize()
+        shape = BulletBoxShape(boxSize)
+        boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
+        boxNP.node().addShape(shape)
+        boxNP.setPos(box.getPosition())
+        boxNP.setCollideMask(BitMask32.allOff())
+        self.world.attachRigidBody(boxNP.node())
+        if test:
+            boxModelNP = self.loadModel('brick')
+            boxModelNP.reparentTo(boxNP)
+            boxModelNP.setPos(0, 0, - boxSize.z)
+            boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+
+        sphere = self.addBall(1, name, ballPos.x, ballPos.y, ballPos.z, 1)
+        result = [boxNP, sphere]
+        return result
 
     def createMovingPlatform(self, x, y, z, pos, name):
         boxSize = Vec3(x,y,z)
@@ -666,7 +749,7 @@ class CharacterController(ShowBase):
         self.pete = BulletCharacterControllerNode(shape, 0.4, 'Pete')
         #    self.character.setMass(1.0)
         self.peteNP = self.render.attachNewNode(self.pete)
-        self.peteNP.setPos(0, 0, 10)
+        self.peteNP.setPos(-10, 60, 10)
         self.peteNP.setH(45)
         self.peteNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.pete)
@@ -687,6 +770,9 @@ class CharacterController(ShowBase):
         if self.peteActorNP.getDistance(self.characterNP) <= 10:
             self.peteActorNP.lookAt(self.characterNP)
             self.peteActorNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
+            if self.peteFirstTaskUnknownSFX is False:
+                self.peteFirstTaskUnknownSFX = True
+                self.playSfx(self.SFXunknown)
         return task.cont
 
     def createATM(self):
@@ -697,7 +783,7 @@ class CharacterController(ShowBase):
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        self.characterNP.setPos(-2, 0, 20)
+        self.characterNP.setPos(11, 50, 5)
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
@@ -718,6 +804,31 @@ class CharacterController(ShowBase):
         self.actorNP.setPlayRate(0.7, 'jump')
         self.actorNP.setPlayRate(0.7, 'land')
 
+    def setUpStage1Objectives(self):
+        self.setUpStage1FirstObjective()
+
+    def setUpStage1FirstObjective(self):
+        box = Box(1, 5, 8, -4, 76, 8, "stage1-objective1-unlockdoor1")
+        target = self.createBox(box, 'sand')
+        objectiveTest = Box(2, 3.5, 0.5, 28, 36, -1, "stage1-objblock-1")
+        keyBallPosition = Vec3(20, 38, 2)
+        stage1Objective1 = self.createObjective(objectiveTest, 'stage1-objective-1', self.stage1Objective,
+                                                keyBallPosition, test=False)
+        taskMgr.add(self.objectiveDestroyBox, 'name', extraArgs=[stage1Objective1[0], stage1Objective1[1], target], appendTask=True)
+
+    def objectiveDestroyBox(self, box, sphere, target, task):
+        if box.getDistance(sphere) <= 3:
+            # self.updateLife(1)
+            self.playSfx(self.SFXclick)
+            self.playMusic(self.BGM2, looping=1)
+            target.node().removeAllChildren()
+            self.world.removeRigidBody(target.node())
+            # boxNP.node().removeAllChildren()
+            # self.world.removeRigidBody(boxNP.node())
+            return task.done
+        else:
+            return task.cont
+
     def setup(self):
 
         # World
@@ -730,6 +841,13 @@ class CharacterController(ShowBase):
 
         self.createATM()
         self.createPete()
+
+        #generate the stages
+        #stage 1
+        self.generateStage("stage1.txt")
+        #Stage1Objectives
+        self.setUpStage1Objectives()
+
         # Floor
         # shape = BulletPlaneShape(Vec3(0, 0, 1), 0)
         floorPos = Vec3(0, 0, -2)
@@ -747,17 +865,17 @@ class CharacterController(ShowBase):
         fmodelNP.setScale(floorSize.x * 2, floorSize.y * 2, floorSize.z)
 
         #Boxes
-        testBox = Box(5, 2, 2, -6, 6, 2, "hello")
+        testBox = Box(5, 2, 3, -6, 15, 2, "hello")
         testBox2 = Box(2, 2, 2, 10, 10, 2, "hello2")
-        self.createBox(testBox, fill = "brick")
-        self.createBox(testBox2, fill = "")
+        self.createBox(testBox, 'brick')
+        self.createBox(testBox2, 'stone3')
 
         #slider
         testSlide = Box(8, 3, 1, -6, -6, 8, "testSlide")
-        self.createSlide(testSlide, 5)
+        self.createSlide(testSlide, 5, 'iron')
 
         self.createFourWalls()
-        self.addBall(3, 'ball1', 3, 6, 10, 0.000000000000001)
+        self.addBall(3, 'ball1', -5, 6, 10, 0.000000000000001)
         self.addBall(1.5, 'ball2', 0, 0, 5, 10)
         self.addBall(.4, 'ball3', 2, 5, 2, 0.001)
 
@@ -811,6 +929,7 @@ class CharacterController(ShowBase):
         # Character
         checkpointpos = Vec3(4, 2, 0)
         self.createCheckPoint(checkpointpos, 'testcheck')
+
         #background
         #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/env.egg')
         #self.env.reparentTo(render)

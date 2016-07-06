@@ -12,4 +12,5 @@ class Box():
         return self.position
 
     def getModel(self):
+        #this is actually the name of the block
         return self.model
