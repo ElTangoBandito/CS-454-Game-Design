@@ -79,7 +79,8 @@ class CharacterController(ShowBase):
         taskMgr.add(self.update, 'updateWorld')
 
         self.setup()
-        base.setBackgroundColor(0.1, 0.1, 0.8, 1)
+        #base.setBackgroundColor(0.1, 0.1, 0.8, 1)
+        base.setBackgroundColor(0.1, 0.1, 0.1, 1)
         base.setFrameRateMeter(True)
         base.disableMouse()
         #base.camera.setPos(self.characterNP.getX(), self.characterNP.getY() + 10, 4)
@@ -98,13 +99,13 @@ class CharacterController(ShowBase):
         #self.isRunningAndJumping = False
         #self.isRunningAndJumpingAndLanding = False
         #self.isLandedFromRun = False
-
         #animation switches
         self.animationRunning = False
         self.animationDashing = False
         self.animationIdle = False
         self.animationLanding = False
         self.landingAnimation = False
+        self.firstBalloonsAcquired = False
         #self.isDashing = False
         self.cdmax = 20
         self.cdmin = 10
@@ -124,15 +125,16 @@ class CharacterController(ShowBase):
         #self.peteTaskAssigned = False
         self.peteInteractions = {
             "firstTask-SFXUnknown" : False,
-            "firstDialogue-Stage1" : False
+            "firstDialogue-Stage1" : False,
+            "secondDialogue-Stage1" : False,
+            "doorDestroyed" : False
         }
         self.peteInteractionsDialogueSwitches = {
             "switch1" : False,
             "switch2" : False,
             "switch3" : False,
             "switch4" : False,
-            "switch5" : False,
-            "doorDestroyed" : False
+            "switch5" : False
         }
         self.peteFirstTaskUnknownSFX = False
 
@@ -163,7 +165,6 @@ class CharacterController(ShowBase):
         #self.HUDTexts[1].setText("test")
 
         #movingplatforms
-
         #Music & Sounds
         #self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
         #self.playMusic(self.BGM1, looping=1)
@@ -198,9 +199,9 @@ class CharacterController(ShowBase):
         #BGM
         self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
         self.BGM2 = self.loadMusic("Resources/BGM/Bramble Blast (Remix).mp3")
-        self.playMusic(self.BGM1, looping=1)
+        self.playMusic(self.BGM1, looping=1, volume = 0.4)
 
-        #sound effects
+        #sound effectt
         self.SFXjump = self.loadSfx("Resources/Sound/Jump.mp3")
         self.SFXdashjump = self.loadSfx("Resources/Sound/Dash Jump.mp3")
         self.SFXpop = self.loadSfx("Resources/Sound/Pop.mp3")
@@ -210,6 +211,7 @@ class CharacterController(ShowBase):
         self.SFXsniffLong = self.loadSfx("Resources/Sound/Sniff Long.mp3")
 
         #voice
+        self.SFXballoons = self.loadSfx("Resources/Voice/balloons.wav")
         self.SFXunknown = self.loadSfx("Resources/Voice/unknown.wav")
 
     def ATMPositionMonitor(self, task):
@@ -285,6 +287,9 @@ class CharacterController(ShowBase):
         return task.cont
 
     def updateScore(self, amount):
+        if self.firstBalloonsAcquired is False:
+            self.firstBalloonsAcquired = True
+            self.playSfx(self.SFXballoons)
         self.playerScore += amount
         scoreMsg = "Score: " + str(self.playerScore)
         self.HUDTexts[1].setText(scoreMsg)
@@ -743,12 +748,13 @@ class CharacterController(ShowBase):
     def createPete(self):
         h = 1
         w = 1.4
-        shape = BulletCapsuleShape(w, h/2, ZUp)
+        #shape = BulletCapsuleShape(w, h/2 - 1, ZUp)
+        shape = BulletBoxShape(Vec3(1, 1, 1))
 
         self.pete = BulletCharacterControllerNode(shape, 0.4, 'Pete')
         #    self.character.setMass(1.0)
         self.peteNP = self.render.attachNewNode(self.pete)
-        self.peteNP.setPos(-10, 66, 10)
+        self.peteNP.setPos(-10, 65, 10)
         self.peteNP.setH(45)
         self.peteNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.pete)
@@ -759,7 +765,7 @@ class CharacterController(ShowBase):
         self.peteActorNP.reparentTo(self.peteNP)
         self.peteActorNP.setScale(0.0035)
         self.peteActorNP.setH(180)
-        self.peteActorNP.setPos(0, 0, -1.45)
+        self.peteActorNP.setPos(0, 0, -1)
         self.peteActorNP.loop('walk')
 
         self.peteIdentifer = 1
@@ -770,12 +776,28 @@ class CharacterController(ShowBase):
         if self.peteActorNP.getDistance(self.characterNP) <= 10:
             self.peteActorNP.lookAt(self.characterNP)
             self.peteActorNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
-            if self.peteInteractions["firstDialogue-Stage1"] is False and self.peteInteractionsDialogueSwitches["doorDestroyed"] is False:
+            if self.peteInteractions["firstDialogue-Stage1"] is False and self.peteInteractions["doorDestroyed"] is False:
                 self.peteInteractions["firstDialogue-Stage1"] = True
                 taskMgr.add(self.peteStage1FirstDialogue, "firstDialogue-Stage1")
             if self.peteInteractions["firstTask-SFXUnknown"] is False:
                 self.peteInteractions["firstTask-SFXUnknown"] = True
                 self.playSfx(self.SFXunknown)
+        if self.peteInteractions["doorDestroyed"] is True:
+            taskMgr.add(self.peteSecondTask, "secondPeteTask")
+            self.peteInteractions["doorDestroyed"] = False
+            return task.done
+        return task.cont
+
+    def peteSecondTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 10:
+            self.peteActorNP.lookAt(self.characterNP)
+            self.peteActorNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
+            if self.peteInteractions["secondDialogue-Stage1"] is False and self.peteInteractions["doorDestroyed"] is False:
+                self.peteInteractions["secondDialogue-Stage1"] = True
+                taskMgr.add(self.peteStage1SecondDialogue, "secondDialogue-Stage1")
+        if self.peteInteractions["doorDestroyed"]:
+            return task.done
+
         return task.cont
 
     def peteStage1FirstDialogue(self, task):
@@ -785,17 +807,37 @@ class CharacterController(ShowBase):
             self.textMessageSpeak(text + "Hey!")
         if task.time > 5 and self.peteInteractionsDialogueSwitches["switch2"] is False:
             self.peteInteractionsDialogueSwitches["switch2"] = True
-            self.textMessageSpeak(text +  "It looks like you're trapped too. Its kind of hard to see in here.", line2= "Try holding  down [Q] and [E}.")
+            self.textMessageSpeak(text +  "It looks like you're trapped too. Its kind of hard to see in here.", line2= "Try holding  down [Q] and [E].")
         if task.time > 14 and self.peteInteractionsDialogueSwitches["switch3"] is False:
             self.peteInteractionsDialogueSwitches["switch3"] = True
             self.textMessageClear()
-        if task.time > 24 and self.peteInteractionsDialogueSwitches['switch4'] is False and self.peteInteractionsDialogueSwitches["doorDestroyed"] is False:
+        if task.time > 24 and self.peteInteractionsDialogueSwitches['switch4'] is False and self.peteInteractions["doorDestroyed"] is False:
             self.peteInteractionsDialogueSwitches["switch4"] = True
-            self.textMessageSpeak(text + "See that ball over there? Looks pretty suspicious to me.")
-        if task.time > 34 and self.peteInteractionsDialogueSwitches["doorDestroyed"] is False:
+            self.textMessageSpeak(text + "See that ball over there? It looks pretty suspicious.")
+        if task.time > 34 and self.peteInteractions["doorDestroyed"] is False and self.peteInteractionsDialogueSwitches["switch5"] is False:
+            self.peteInteractionsDialogueSwitches["switch5"] = True
             self.textMessageClear()
-        if self.peteInteractionsDialogueSwitches["doorDestroyed"]:
+        if self.peteInteractions["doorDestroyed"]:
             self.textMessageSpeak(text + "Hey! You did it!")
+            taskMgr.doMethodLater(3, self.textMessageClearTask, 'clearMessage')
+            self.clearPeteDialogueSwitches()
+            return task.done
+        return task.cont
+
+    def peteStage1SecondDialogue(self, task):
+        text = "Talking Panda: "
+        if self.peteInteractionsDialogueSwitches["switch1"] is False:
+            self.peteInteractionsDialogueSwitches["switch1"] = True
+            self.textMessageSpeak(text + "You got out! See that door behind you?", line2="There should be another ball nearby...")
+        if task.time > 8 and self.peteInteractionsDialogueSwitches["switch2"] is False:
+            self.peteInteractionsDialogueSwitches["switch2"] = True
+            self.textMessageClear()
+            self.textMessageSpeak(text + "Try looking around, you can move your camera with the arrow keys.")
+        if task.time > 16 and self.peteInteractionsDialogueSwitches["switch3"] is False:
+            self.peteInteractionsDialogueSwitches["switch3"] = True
+            self.textMessageClear()
+        if self.peteInteractions["doorDestroyed"]:
+            self.textMessageSpeak(text + "Freeeeeeeeeeeeeedom!")
             taskMgr.doMethodLater(6, self.textMessageClearTask, 'clearMessage')
             self.clearPeteDialogueSwitches()
             return task.done
@@ -828,7 +870,8 @@ class CharacterController(ShowBase):
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        self.characterNP.setPos(10, 70, 5)
+        self.characterNP.setPos(12, 55, 4)
+        #self.characterNP.setPos(-27, 76, 14)
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
@@ -851,6 +894,7 @@ class CharacterController(ShowBase):
 
     def setUpStage1Objectives(self):
         self.setUpStage1FirstObjective()
+        self.setUpStage1SecondObjective()
 
     def setUpStage1FirstObjective(self):
         box = Box(1, 5, 8, -4, 76, 8, "stage1-objective1-unlockdoor1")
@@ -860,6 +904,18 @@ class CharacterController(ShowBase):
         stage1Objective1 = self.createObjective(objectiveTest, 'stage1-objective-1', self.stage1Objective,
                                                 keyBallPosition, test=False)
         taskMgr.add(self.objectiveDestroyBox, 'name', extraArgs=[stage1Objective1[0], stage1Objective1[1], target], appendTask=True)
+
+    def setUpStage1SecondObjective(self):
+        #2, 1, 1.75, -10, 69, 1.75, sand
+        box = Box(2, 1, 1.75, -10, 69, 1.75, "stage1-objective2-unlockdoor1")
+        target = self.createBox(box, 'sand')
+        #1, 2, 1, -67, 85, -1, brick
+        objectiveTest = Box(1, 2, 1, -67, 85, -1, "stage1-objblock-2")
+        keyBallPosition = Vec3(-28, 67, 14)
+        stage1Objective1 = self.createObjective(objectiveTest, 'stage1-objective-2', self.stage1Objective,
+                                                keyBallPosition, test=False)
+        taskMgr.add(self.objectiveDestroyBox, 'name', extraArgs=[stage1Objective1[0], stage1Objective1[1], target],
+                    appendTask=True)
 
     def createObjective(self, box, name, tracker, ballPos, test=False):
         boxSize = box.getSize()
@@ -886,10 +942,10 @@ class CharacterController(ShowBase):
         if len(collisions.getContacts()) > 0:
             # self.updateLife(1)
             self.playSfx(self.SFXclick)
-            self.playMusic(self.BGM2, looping=1)
+            #self.playMusic(self.BGM2, looping=1, volumne = 0.4)
             target.node().removeAllChildren()
             self.world.removeRigidBody(target.node())
-            self.peteInteractionsDialogueSwitches["doorDestroyed"] = True
+            self.peteInteractions["doorDestroyed"] = True
             # boxNP.node().removeAllChildren()
             # self.world.removeRigidBody(boxNP.node())
             return task.done
@@ -911,7 +967,7 @@ class CharacterController(ShowBase):
 
         #generate the stages
         #stage 1
-        self.generateStage("stage1.txt")
+        self.generateStage("Stage/stage1.txt")
         #Stage1Objectives
         self.setUpStage1Objectives()
 
