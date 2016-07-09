@@ -127,7 +127,9 @@ class CharacterController(ShowBase):
             "firstTask-SFXUnknown" : False,
             "firstDialogue-Stage1" : False,
             "secondDialogue-Stage1" : False,
-            "doorDestroyed" : False
+            "thirdDialogue-Stage1" : False,
+            "doorDestroyed" : False,
+            "bookIt" : False
         }
         self.peteInteractionsDialogueSwitches = {
             "switch1" : False,
@@ -138,6 +140,12 @@ class CharacterController(ShowBase):
         }
         self.peteFirstTaskUnknownSFX = False
 
+
+        #time objectives
+        self.timeObjectivesState = {
+            "objectiveCleared" : False,
+            "objectiveSet" : False
+        }
 
         #checkpoint
         self.respawnPoint = Vec3(self.characterNP.getX(), self.characterNP.getY(), self.characterNP.getZ())
@@ -152,6 +160,7 @@ class CharacterController(ShowBase):
         self.helpTexts = []
         self.textMessage = OnscreenText(text="", style=1, fg=(1,1,1,1), pos=(0,-0.7), align = TextNode.ACenter, scale = 0.06)
         self.textMessage2 = OnscreenText(text="", style=1, fg=(1, 1, 1, 1), pos=(0, -0.8), align=TextNode.ACenter, scale=0.06)
+        self.textTimeAlert = OnscreenText(text="", style=1, fg=(1, 1, 1, 1), pos=(0.0, 0.80), align=TextNode.ACenter, scale=0.12)
         #textObject = OnscreenText(text='my text string', style = 1, fg=(1,1,0,1), pos=(-1.3, 0.95), align=TextNode.ALeft, scale=0.07)
         #textObject.destroy()
         self.displayHUD()
@@ -162,6 +171,7 @@ class CharacterController(ShowBase):
         self.ATMPos = "(" + str(self.ATMPosX) + ", " + str(self.ATMPosY) + ", " + str(self.ATMPosZ) + ")"
         self.ATMPoisitionMonitorText = OnscreenText(text=self.ATMPos, style = 1, fg=(1,1,1,1), pos = (1.3,-0.95), align=TextNode.A_right, scale = 0.08)
         taskMgr.add(self.ATMPositionMonitor, "playerPositionMonitor")
+
         #self.HUDTexts[1].setText("test")
 
         #movingplatforms
@@ -191,6 +201,19 @@ class CharacterController(ShowBase):
                 model = parameters[6]
                 self.createBox(box, model)
 
+    def generateCoins(self, fileName):
+        counter = 1
+        with open(fileName) as inputFile:
+            for line in inputFile:
+                parameters = []
+                for value in line.strip().split(','):
+                    parameters.append(value.strip())
+                x = float(parameters[0])
+                y = float(parameters[1])
+                z = float(parameters[2])
+                coinName = fileName.replace('.txt', "") + "-" + str(counter)
+                self.createCoin(Vec3(x,y,z),coinName)
+
     def appendToStage(self, x, y, z, px, py, pz, name):
         box = Box(x, y, z, px, py, pz, name)
         self.stage1.append(box)
@@ -209,10 +232,13 @@ class CharacterController(ShowBase):
         self.SFXlifeUp = self.loadSfx("Resources/Sound/Life Up.wav")
         self.SFXsniffShort = self.loadSfx("Resources/Sound/Sniff Short.mp3")
         self.SFXsniffLong = self.loadSfx("Resources/Sound/Sniff Long.mp3")
+        self.SFXticktock = self.loadSfx("Resources/Sound/Tick Tock.mp3")
 
         #voice
         self.SFXballoons = self.loadSfx("Resources/Voice/balloons.wav")
         self.SFXunknown = self.loadSfx("Resources/Voice/unknown.wav")
+        self.SFXacknowledged = self.loadSfx("Resources/Voice/acknowledged.wav")
+        self.SFXbattery = self.loadSfx("Resources/Voice/battery.wav")
 
     def ATMPositionMonitor(self, task):
         self.ATMPosX = self.characterNP.getX()
@@ -271,7 +297,7 @@ class CharacterController(ShowBase):
                          scale=0.06))
 
     def displayHUD(self):
-        lifeMsg = "Lives: " + str(self.playerLives)
+        lifeMsg = "Batteries: " + str(self.playerLives)
         self.HUDTexts.append(OnscreenText(text=lifeMsg, style=1, fg=(1,1,0,1), pos=(-1.3,0.95), align = TextNode.ALeft, scale = 0.06))
         scoreMsg = "Score: " + str(self.playerScore)
         self.HUDTexts.append(OnscreenText(text=scoreMsg, style=1, fg=(1,1,0,1), pos=(0.0,0.95), align = TextNode.ACenter, scale = 0.06))
@@ -296,7 +322,7 @@ class CharacterController(ShowBase):
 
     def updateLife(self, amount):
         if amount > 0:
-            self.playSfx(self.SFXlifeUp)
+            self.playSfx(self.SFXlifeUp, volume = 0.1)
         self.playerLives += amount
         lifeMsg = "Lives: " + str(self.playerLives)
         self.HUDTexts[0].setText(lifeMsg)
@@ -464,8 +490,6 @@ class CharacterController(ShowBase):
             if inputState.isSet('turnLeft'):  base.camera.setX(base.camera, +45 * globalClock.getDt())
             if inputState.isSet('turnRight'): base.camera.setX(base.camera, -45 * globalClock.getDt())
 
-        # If the camera is too far from ralph, move it closer.
-        # If the camera is too close to ralph, move it farther.
         camvec = self.characterNP.getPos() - base.camera.getPos()
         camvec.setZ(0)
         camdist = camvec.length()
@@ -482,6 +506,9 @@ class CharacterController(ShowBase):
         if (inputState.isSet("zoomOut") and self.cdmax < 40):
             self.cdmax += .2
             self.cdmin += .2
+        if abs(base.camera.getZ() - self.characterNP.getZ()) > self.cdmax:
+            #if base.camera.getZ() > 0:
+            base.camera.setZ(self.characterNP.getZ() + self.cdmax)
         #Atm's animations
         '''
         if (inputState.isSet('forward') or inputState.isSet('reverse') or inputState.isSet('left') or inputState.isSet('right')) and self.character.isOnGround() and self.isLanding is False:
@@ -528,7 +555,6 @@ class CharacterController(ShowBase):
         self.floater.setZ(self.characterNP.getZ() + 1.0)
         #base.camera.setZ(self.characterNP.getZ() + 5)
         base.camera.lookAt(self.floater)
-
         return task.cont
 
     def landingAnimationTask(self, task):
@@ -675,6 +701,18 @@ class CharacterController(ShowBase):
         # boxNP.node().removeAllChildren()
         # self.world.removeRigidBody(boxNP.node())
 
+    def createInvisibleBox(selfself, box):
+        boxSize = box.getSize()
+        shape = BulletBoxShape(boxSize)
+        boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
+        boxNP.node().addShape(shape)
+        boxNP.setPos(box.getPosition())
+        boxNP.setCollideMask(BitMask32.allOn())
+        self.world.attachRigidBody(boxNP.node())
+
+        # boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
+        return boxNP
+
     def loadModel(self, modelName):
         if modelName == 'brick':
             return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-cube/brick.egg')
@@ -773,9 +811,10 @@ class CharacterController(ShowBase):
         taskMgr.add(self.peteFirstTask, 'firstPeteTask')
 
     def peteFirstTask(self, task):
-        if self.peteActorNP.getDistance(self.characterNP) <= 10:
+        if self.peteActorNP.getDistance(self.characterNP) <= 18:
             self.peteActorNP.lookAt(self.characterNP)
             self.peteActorNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
+            self.peteNP.setH(0)
             if self.peteInteractions["firstDialogue-Stage1"] is False and self.peteInteractions["doorDestroyed"] is False:
                 self.peteInteractions["firstDialogue-Stage1"] = True
                 taskMgr.add(self.peteStage1FirstDialogue, "firstDialogue-Stage1")
@@ -783,21 +822,42 @@ class CharacterController(ShowBase):
                 self.peteInteractions["firstTask-SFXUnknown"] = True
                 self.playSfx(self.SFXunknown)
         if self.peteInteractions["doorDestroyed"] is True:
-            taskMgr.add(self.peteSecondTask, "secondPeteTask")
-            self.peteInteractions["doorDestroyed"] = False
+            #taskMgr.add(self.peteSecondTask, "secondPeteTask")
+            #self.peteInteractions["doorDestroyed"] = False
             return task.done
         return task.cont
 
     def peteSecondTask(self, task):
-        if self.peteActorNP.getDistance(self.characterNP) <= 10:
+        if self.peteActorNP.getDistance(self.characterNP) <= 15:
             self.peteActorNP.lookAt(self.characterNP)
             self.peteActorNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
             if self.peteInteractions["secondDialogue-Stage1"] is False and self.peteInteractions["doorDestroyed"] is False:
                 self.peteInteractions["secondDialogue-Stage1"] = True
                 taskMgr.add(self.peteStage1SecondDialogue, "secondDialogue-Stage1")
         if self.peteInteractions["doorDestroyed"]:
+            #self.pete.setAngularMovement(150)
             return task.done
 
+        return task.cont
+
+    def peteThirdTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 8:
+            self.peteActorNP.lookAt(self.characterNP)
+            self.peteActorNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
+            if self.peteInteractions["thirdDialogue-Stage1"] is False:
+                self.peteInteractions["thirdDialogue-Stage1"] = True
+                taskMgr.add(self.peteStage1ThirdDialogue, "peteStage1ThirdDialogue")
+        return task.cont
+
+    def peteWalkOutCell(self, task):
+        if task.time > 12:
+            self.pete.setLinearMovement(Vec3(0,0,0), True)
+            self.peteInteractions["doorDestroyed"] = False
+            taskMgr.add(self.peteThirdTask, 'petethirdTask')
+            return task.done
+        elif task.time < 4:
+            self.peteActorNP.setHpr(180, 0, 0)
+            self.pete.setLinearMovement(Vec3(0, 0.5, 0), True)
         return task.cont
 
     def peteStage1FirstDialogue(self, task):
@@ -811,16 +871,18 @@ class CharacterController(ShowBase):
         if task.time > 14 and self.peteInteractionsDialogueSwitches["switch3"] is False:
             self.peteInteractionsDialogueSwitches["switch3"] = True
             self.textMessageClear()
-        if task.time > 24 and self.peteInteractionsDialogueSwitches['switch4'] is False and self.peteInteractions["doorDestroyed"] is False:
+        if task.time > 34 and self.peteInteractionsDialogueSwitches['switch4'] is False and self.peteInteractions["doorDestroyed"] is False:
             self.peteInteractionsDialogueSwitches["switch4"] = True
-            self.textMessageSpeak(text + "See that ball over there? It looks pretty suspicious.")
-        if task.time > 34 and self.peteInteractions["doorDestroyed"] is False and self.peteInteractionsDialogueSwitches["switch5"] is False:
+            self.textMessageSpeak(text + "See that hole in the corner? It looks pretty suspicious.")
+        if task.time > 44 and self.peteInteractions["doorDestroyed"] is False and self.peteInteractionsDialogueSwitches["switch5"] is False:
             self.peteInteractionsDialogueSwitches["switch5"] = True
             self.textMessageClear()
         if self.peteInteractions["doorDestroyed"]:
             self.textMessageSpeak(text + "Hey! You did it!")
             taskMgr.doMethodLater(3, self.textMessageClearTask, 'clearMessage')
             self.clearPeteDialogueSwitches()
+            self.peteInteractions["doorDestroyed"] = False
+            taskMgr.add(self.peteSecondTask, "secondPeteTask")
             return task.done
         return task.cont
 
@@ -828,8 +890,9 @@ class CharacterController(ShowBase):
         text = "Talking Panda: "
         if self.peteInteractionsDialogueSwitches["switch1"] is False:
             self.peteInteractionsDialogueSwitches["switch1"] = True
-            self.textMessageSpeak(text + "You got out! See that door behind you?", line2="There should be another ball nearby...")
+            self.textMessageSpeak(text + "You got out! But the exit is still blocked.", line2="There should be another ball nearby...")
         if task.time > 8 and self.peteInteractionsDialogueSwitches["switch2"] is False:
+            self.playSfx(self.SFXacknowledged)
             self.peteInteractionsDialogueSwitches["switch2"] = True
             self.textMessageClear()
             self.textMessageSpeak(text + "Try looking around, you can move your camera with the arrow keys.")
@@ -837,18 +900,36 @@ class CharacterController(ShowBase):
             self.peteInteractionsDialogueSwitches["switch3"] = True
             self.textMessageClear()
         if self.peteInteractions["doorDestroyed"]:
-            self.textMessageSpeak(text + "Freeeeeeeeeeeeeedom!")
-            taskMgr.doMethodLater(6, self.textMessageClearTask, 'clearMessage')
+            self.textMessageSpeak(text + "Freeedoooom!")
+            taskMgr.doMethodLater(3, self.textMessageClearTask, 'clearMessage')
             self.clearPeteDialogueSwitches()
+            taskMgr.add(self.peteWalkOutCell, 'peteEscapeTask')
             return task.done
+        return task.cont
+
+    def peteStage1ThirdDialogue(self,task):
+        text = "Talking Panda: "
+        if self.peteInteractionsDialogueSwitches["switch1"] is False:
+            self.peteInteractionsDialogueSwitches["switch1"] = True
+            self.textMessageSpeak(text + "Hey, you are awesome! I like you, have a battery.", line2="The exit's still blocked though...")
+            self.updateLife(1)
+            self.playSfx(self.SFXbattery)
+        if task.time > 8 and self.peteInteractionsDialogueSwitches["switch2"] is False:
+            self.peteInteractionsDialogueSwitches["switch2"] = True
+            self.textMessageClear()
+            self.textMessageSpeak(text + "There's a button back inside my cell. It made funny noises when i stepped on it", line2="You go on ahead, this puzzle is quite puzzling to me...")
+        if task.time > 16 and self.peteInteractionsDialogueSwitches["switch3"] is False:
+            self.peteInteractionsDialogueSwitches["switch3"] = True
+            self.peteInteractions["bookIt"] = True
+            self.textMessageClear()
         return task.cont
 
     def textMessageSpeak(self, line1, line2=""):
         self.textMessage.setText(line1)
         self.textMessage2.setText(line2)
         if line2 != "":
-            self.playSfx(self.SFXsniffLong)
-        else: self.playSfx(self.SFXsniffShort)
+            self.playSfx(self.SFXsniffLong, volume = 0.1)
+        else: self.playSfx(self.SFXsniffShort, volume = 0.1)
 
     def textMessageClear(self):
         self.textMessage.setText("")
@@ -866,12 +947,11 @@ class CharacterController(ShowBase):
         h = 4.25
         w = .6
         shape = BulletCylinderShape(w, h + w - 0.70, ZUp)
-
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
         self.characterNP.setPos(12, 55, 4)
-        #self.characterNP.setPos(-27, 76, 14)
+        #self.characterNP.setPos(-8, 50, 4)
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
@@ -895,19 +975,20 @@ class CharacterController(ShowBase):
     def setUpStage1Objectives(self):
         self.setUpStage1FirstObjective()
         self.setUpStage1SecondObjective()
+        self.setUpStage1ThirdObjective()
 
     def setUpStage1FirstObjective(self):
         box = Box(1, 5, 8, -4, 76, 8, "stage1-objective1-unlockdoor1")
         target = self.createBox(box, 'sand')
         objectiveTest = Box(2, 3.5, 0.5, 28, 36, -1, "stage1-objblock-1")
-        keyBallPosition = Vec3(7, 50, 2)
+        keyBallPosition = Vec3(3, 54, 2)
         stage1Objective1 = self.createObjective(objectiveTest, 'stage1-objective-1', self.stage1Objective,
                                                 keyBallPosition, test=False)
         taskMgr.add(self.objectiveDestroyBox, 'name', extraArgs=[stage1Objective1[0], stage1Objective1[1], target], appendTask=True)
 
     def setUpStage1SecondObjective(self):
         #2, 1, 1.75, -10, 69, 1.75, sand
-        box = Box(2, 1, 1.75, -10, 69, 1.75, "stage1-objective2-unlockdoor1")
+        box = Box(2, 1, 2.75, -10, 69, 2.75, "stage1-objective2-unlockdoor1")
         target = self.createBox(box, 'sand')
         #1, 2, 1, -67, 85, -1, brick
         objectiveTest = Box(1, 2, 1, -67, 85, -1, "stage1-objblock-2")
@@ -916,6 +997,65 @@ class CharacterController(ShowBase):
                                                 keyBallPosition, test=False)
         taskMgr.add(self.objectiveDestroyBox, 'name', extraArgs=[stage1Objective1[0], stage1Objective1[1], target],
                     appendTask=True)
+
+    def setUpStage1ThirdObjective(self):
+        #10, 1, 9, -15, 125, 10, sand
+        box = Box(10, 1, 9, -15, 125, 10, 'stage1-objective3-timed1')
+        switch = self.createTimeSwitch(Vec3(-18, 55, 1), "stage1TimedObjective1Switch1")
+        taskMgr.add(self.createTimeObjective, 'stage1TimedObjectiveCreation1', extraArgs=[box, 'sand', switch, 11], appendTask = True)
+
+    def createTimeObjective(self, box, modelName, switch, time, task):
+        if self.timeObjectivesState["objectiveSet"] is False:
+            self.timeObjectivesState["objectiveSet"] = True
+            target = self.createBox(box, modelName)
+            taskMgr.add(self.timeObject, 'stage1TimedObjective1', extraArgs=[target, switch, time], appendTask=True)
+            self.timeObjectivesState["objectiveCleared"] = False
+        return task.cont
+
+    def timeObject(self, target, switch, time, task):
+        collision = self.world.contactTestPair(switch.node(), self.character)
+        if len(collision.getContacts()) > 0 and self.timeObjectivesState["objectiveCleared"] is False:
+            self.playSfx(self.SFXclick)
+            self.timeObjectivesState["objectiveCleared"] = True
+            target.node().removeAllChildren()
+            self.world.removeRigidBody(target.node())
+            taskMgr.add(self.timeObjectiveTimerRespawn, "stage1RespawnTimer", extraArgs=[time], appendTask=True)
+            self.SFXticktock.play()
+            return task.done
+        return task.cont
+
+    def timeObjectiveTimerRespawn(self, time, task):
+        timeLeft = int(time - task.time)
+        self.textTimeAlert.setText(str(timeLeft))
+        if timeLeft <= 7 and self.peteInteractions["bookIt"]:
+            self.peteInteractions["bookIt"] = False
+            self.textMessageSpeak("Talking Panda: You're not gonna make it!", line2="Hold [SHIFT] and BOOK IT!")
+        if self.SFXticktock.status() != self.SFXticktock.PLAYING:
+            self.SFXticktock.play()
+        if timeLeft <= 3:
+            self.textTimeAlert.setFg((1,0,0,1))
+        if task.time >= time:
+            self.textTimeAlert.setText("")
+            self.textTimeAlert.setFg((1, 1, 1, 1))
+            self.timeObjectivesState["objectiveSet"] = False
+            self.SFXticktock.stop()
+            self.textMessageClear()
+            return task.done
+        return task.cont
+
+    def createTimeSwitch(self, pos, name):
+        boxSize = Vec3(1, 1, 0.2)
+        shape = BulletBoxShape(boxSize)
+        boxNP = self.render.attachNewNode(BulletRigidBodyNode(name))
+        boxNP.node().addShape(shape)
+        boxNP.setPos(pos)
+        boxNP.setCollideMask(BitMask32.allOff())
+        self.world.attachRigidBody(boxNP.node())
+        boxModelNP = self.loadModel('sand')
+        boxModelNP.reparentTo(boxNP)
+        boxModelNP.setPos(0, 0, - boxSize.z)
+        boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+        return boxNP
 
     def createObjective(self, box, name, tracker, ballPos, test=False):
         boxSize = box.getSize()
@@ -968,6 +1108,7 @@ class CharacterController(ShowBase):
         #generate the stages
         #stage 1
         self.generateStage("Stage/stage1.txt")
+        self.generateCoins("Stage/stage1coins.txt")
         #Stage1Objectives
         self.setUpStage1Objectives()
 
