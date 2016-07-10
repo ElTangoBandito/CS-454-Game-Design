@@ -38,6 +38,7 @@ from direct.gui.OnscreenText import OnscreenText
 
 from math import pi, sin, cos
 from Box import *
+import random
 
 class CharacterController(ShowBase):
     def __init__(self):
@@ -77,6 +78,16 @@ class CharacterController(ShowBase):
 
         # Task
         taskMgr.add(self.update, 'updateWorld')
+
+        # time objectives
+        self.timeObjectivesState = {
+            "stage1objective1": False,
+            "stage1objective2": False,
+            "stage1objective3": False,
+            "objectiveCleared": False,
+            "objectiveSet": False,
+            "objective2Set": False
+        }
 
         self.setup()
         #base.setBackgroundColor(0.1, 0.1, 0.8, 1)
@@ -140,18 +151,12 @@ class CharacterController(ShowBase):
         }
         self.peteFirstTaskUnknownSFX = False
 
-
-        #time objectives
-        self.timeObjectivesState = {
-            "objectiveCleared" : False,
-            "objectiveSet" : False
-        }
-
         #checkpoint
         self.respawnPoint = Vec3(self.characterNP.getX(), self.characterNP.getY(), self.characterNP.getZ())
         self.respawning = False
         self.checkPointDict = {
-            "stage1-checkpoint-1" : False
+            "stage1-checkpoint-1" : False,
+            "stage1-checkpoint-2" : False
         }
 
         #On Screen Texts
@@ -201,6 +206,26 @@ class CharacterController(ShowBase):
                 model = parameters[6]
                 self.createBox(box, model)
 
+    def generateSlide(self, fileName):
+        counter = 1
+        with open(fileName) as inputFile:
+            for line in inputFile:
+                parameters = []
+                for value in line.strip().split(','):
+                    parameters.append(value.strip())
+                x = float(parameters[0])
+                y = float(parameters[1])
+                z = float(parameters[2])
+                px = float(parameters[3])
+                py = float(parameters[4])
+                pz = float(parameters[5])
+                blockName = fileName.replace('.txt', "") + "-" + str(counter)
+                counter = counter + 1
+                box = Box(x, y, z, px, py, pz, blockName)
+                model = parameters[6]
+                angle = float(parameters[7])
+                self.createSlide(box, angle, model)
+
     def generateCoins(self, fileName):
         counter = 1
         with open(fileName) as inputFile:
@@ -233,12 +258,27 @@ class CharacterController(ShowBase):
         self.SFXsniffShort = self.loadSfx("Resources/Sound/Sniff Short.mp3")
         self.SFXsniffLong = self.loadSfx("Resources/Sound/Sniff Long.mp3")
         self.SFXticktock = self.loadSfx("Resources/Sound/Tick Tock.mp3")
+        self.SFXcheckpoint = self.loadSfx("Resources/Sound/checkpoint.wav")
 
         #voice
         self.SFXballoons = self.loadSfx("Resources/Voice/balloons.wav")
         self.SFXunknown = self.loadSfx("Resources/Voice/unknown.wav")
         self.SFXacknowledged = self.loadSfx("Resources/Voice/acknowledged.wav")
         self.SFXbattery = self.loadSfx("Resources/Voice/battery.wav")
+        self.SFXfall1 = self.loadSfx("Resources/Voice/fall respawn1.wav")
+        self.SFXfall2 = self.loadSfx("Resources/Voice/fall respawn2.wav")
+        self.SFXfall3 = self.loadSfx("Resources/Voice/fall respawn3.wav")
+        self.SFXfall4 = self.loadSfx("Resources/Voice/fall respawn4.wav")
+        self.SFXfall5 = self.loadSfx("Resources/Voice/fall respawn5.wav")
+        self.SFXfall6 = self.loadSfx("Resources/Voice/fall respawn6.wav")
+        self.SFXfallRespawnDict = {
+            "1" : self.SFXfall1,
+            "2" : self.SFXfall2,
+            "3" : self.SFXfall3,
+            "4" : self.SFXfall4,
+            "5" : self.SFXfall5,
+            "6" : self.SFXfall6
+        }
 
     def ATMPositionMonitor(self, task):
         self.ATMPosX = self.characterNP.getX()
@@ -465,10 +505,13 @@ class CharacterController(ShowBase):
 
         #manual respawn
         if inputState.isSet('respawn') and self.respawning is False and self.playerLives > 1:
-            self.respawning = True
-            self.updateLife(-1)
-            taskMgr.doMethodLater(3, self.checkPointRespawnTask, 'manual respawn')
-            self.characterNP.setPos(self.respawnPoint)
+            self.respawnATM()
+
+    def respawnATM(self):
+        self.respawning = True
+        self.updateLife(-1)
+        taskMgr.doMethodLater(3, self.checkPointRespawnTask, 'manual respawn')
+        self.characterNP.setPos(self.respawnPoint)
 
     def update(self, task):
         dt = globalClock.getDt()
@@ -648,6 +691,7 @@ class CharacterController(ShowBase):
         smileyFace = self.loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/smiley/smiley.egg')
         smileyFace.reparentTo(coin)
         smileyFace.setScale(1)
+        smileyFace.setColorScale(1,1, 0, 1)
         taskMgr.add(self.coinSpinTask, "coinTask1", extraArgs=[coin, smileyFace, node], appendTask = True)
 
     def coinSpinTask(self, coin, coinPos, node, task):
@@ -669,7 +713,7 @@ class CharacterController(ShowBase):
         shape = BulletBoxShape(boxSize)
         boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
         boxNP.node().addShape(shape)
-        boxNP.setR(-50)
+        boxNP.setR(-46)
         boxNP.setH(h)
         boxNP.setPos(box.getPosition())
         boxNP.setCollideMask(BitMask32.allOn())
@@ -679,6 +723,22 @@ class CharacterController(ShowBase):
         boxModelNP.reparentTo(boxNP)
         boxModelNP.setPos(0, 0, - boxSize.z)
         boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+
+    def createDisk(self, box):
+        boxSize = box.getSize()
+        shape = BulletCylinderShape(boxSize, ZUp)
+        boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
+        boxNP.node().addShape(shape)
+        boxNP.setPos(box.getPosition())
+        boxNP.setCollideMask(BitMask32.allOn())
+        self.world.attachRigidBody(boxNP.node())
+
+        # boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
+        boxModelNP = self.loader.loadModel("Resources/Models/ModelCollection/EnvBuildingBlocks/cylinder/marble-cylinder.egg")
+        boxModelNP.reparentTo(boxNP)
+        boxModelNP.setPos(0, 0, -boxSize.z - 2)
+        boxModelNP.setScale(3)
+        return boxNP
 
     def createBox(self, box, modelName):
         boxSize = box.getSize()
@@ -753,12 +813,12 @@ class CharacterController(ShowBase):
         return task.cont
 
     def createCheckPoint(self, pos, name):
-        boxSize = Vec3(0, 0, 0)
+        boxSize = Vec3(0.2, 0.2, 3)
         shape = BulletBoxShape(boxSize)
         boxNP = self.render.attachNewNode(BulletRigidBodyNode(name))
         boxNP.node().addShape(shape)
         boxNP.setPos(pos)
-        boxNP.setCollideMask(BitMask32.allOn())
+        boxNP.setCollideMask(BitMask32.allOff())
         self.world.attachRigidBody(boxNP.node())
 
         boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/spinner/spinner.egg')
@@ -770,13 +830,13 @@ class CharacterController(ShowBase):
     def checkPointSpinTask(self, boxNP, checkPoint, name, task):
 
         collision = self.world.contactTestPair(boxNP.node(), self.character)
-        if len(collision.getContacts()) > 0:
+        if len(collision.getContacts()) > 0 and self.checkPointDict[name] is False:
             self.checkPointDict[name] = True
             self.respawnPoint = boxNP.getPos()
+            self.playSfx(self.SFXcheckpoint)
         if self.checkPointDict[name]:
             angleDegrees = task.time * 6.0
-        #angleRadians = angleDegrees * (pi / 180.0)
-            checkPoint.setHpr(angleDegrees * 100, 0, 0)
+            checkPoint.setHpr(angleDegrees * 200, 0, 0)
         return task.cont
 
     def checkPointRespawnTask(self, task):
@@ -828,7 +888,7 @@ class CharacterController(ShowBase):
         return task.cont
 
     def peteSecondTask(self, task):
-        if self.peteActorNP.getDistance(self.characterNP) <= 15:
+        if self.peteActorNP.getDistance(self.characterNP) <= 17:
             self.peteActorNP.lookAt(self.characterNP)
             self.peteActorNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
             if self.peteInteractions["secondDialogue-Stage1"] is False and self.peteInteractions["doorDestroyed"] is False:
@@ -847,6 +907,8 @@ class CharacterController(ShowBase):
             if self.peteInteractions["thirdDialogue-Stage1"] is False:
                 self.peteInteractions["thirdDialogue-Stage1"] = True
                 taskMgr.add(self.peteStage1ThirdDialogue, "peteStage1ThirdDialogue")
+        if self.checkPointDict["stage1-checkpoint-1"]:
+            return task.done
         return task.cont
 
     def peteWalkOutCell(self, task):
@@ -922,6 +984,8 @@ class CharacterController(ShowBase):
             self.peteInteractionsDialogueSwitches["switch3"] = True
             self.peteInteractions["bookIt"] = True
             self.textMessageClear()
+        if self.checkPointDict["stage1-checkpoint-1"] is True:
+            return task.done
         return task.cont
 
     def textMessageSpeak(self, line1, line2=""):
@@ -951,7 +1015,7 @@ class CharacterController(ShowBase):
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
         self.characterNP.setPos(12, 55, 4)
-        #self.characterNP.setPos(-8, 50, 4)
+        #self.characterNP.setPos(-10, 260, 36)
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
@@ -972,10 +1036,27 @@ class CharacterController(ShowBase):
         self.actorNP.setPlayRate(0.7, 'jump')
         self.actorNP.setPlayRate(0.7, 'land')
 
-    def setUpStage1Objectives(self):
+    def ATMRespawnTask(self, task):
+        if self.characterNP.getZ() <= -60 and self.respawning is False and self.playerLives > 1:
+            self.respawnATM()
+            selector = random.randint(1, len(self.SFXfallRespawnDict))
+            self.playSfx(self.SFXfallRespawnDict[str(selector)])
+            print selector
+        return task.cont
+
+    def setUpStage1(self):
+        self.generateStage("Stage/stage1.txt")
+        self.generateCoins("Stage/stage1coins.txt")
+        self.generateSlide("Stage/stage1slide.txt")
         self.setUpStage1FirstObjective()
         self.setUpStage1SecondObjective()
         self.setUpStage1ThirdObjective()
+        self.setUpStage1FourthObjective()
+        self.setUpStage1FifthObjective()
+
+        #checkpoints
+        checkpointpos = Vec3(26, 171, 1)
+        self.createCheckPoint(checkpointpos, 'stage1-checkpoint-1')
 
     def setUpStage1FirstObjective(self):
         box = Box(1, 5, 8, -4, 76, 8, "stage1-objective1-unlockdoor1")
@@ -1000,31 +1081,89 @@ class CharacterController(ShowBase):
 
     def setUpStage1ThirdObjective(self):
         #10, 1, 9, -15, 125, 10, sand
-        box = Box(10, 1, 9, -15, 125, 10, 'stage1-objective3-timed1')
-        switch = self.createTimeSwitch(Vec3(-18, 55, 1), "stage1TimedObjective1Switch1")
-        taskMgr.add(self.createTimeObjective, 'stage1TimedObjectiveCreation1', extraArgs=[box, 'sand', switch, 11], appendTask = True)
+        name = "stage1-objective3-timed1"
+        switchName = name + "switch"
+        box = Box(10, 1, 9, -15, 125, 10, name)
+        switch = self.createTimeSwitch(Vec3(-18, 55, 1), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjective, name, extraArgs=[box, 'sand', switch, 11, switchName, name], appendTask = True)
 
-    def createTimeObjective(self, box, modelName, switch, time, task):
-        if self.timeObjectivesState["objectiveSet"] is False:
-            self.timeObjectivesState["objectiveSet"] = True
+    def setUpStage1FourthObjective(self):
+        #2, 2, 1, 60, 163, 16, sand
+        #95, 177, 10
+        name = "stage1-objective4-timed1"
+        switchName = name + "switch"
+        box = Box(2, 2, 1, 60, 163, 16, name)
+        switch = self.createTimeSwitch(Vec3(95, 177, 8.5), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, 21, switchName, name],
+                    appendTask=True)
+
+    def setUpStage1FifthObjective(self):
+        #1, 1, 0.2, 62, 170, 34.5, sand
+        #6, 20, 0.2, -12, 200, 0, sand
+        name = "stage1-objective5-timed1"
+        switchName = name + "switch"
+        box = Box(6, 20, 0.2, -12, 200, 0, name)
+        switch = self.createTimeSwitch(Vec3(62, 170, 34.5), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, 16, switchName, name],
+                    appendTask=True)
+
+    def createTimeObjectiveReverse(self, box, modelName, switch, time, switchName, name, task):
+        collision = self.world.contactTestPair(switch.node(), self.character)
+        if len(collision.getContacts()) > 0 and self.timeObjectivesState[switchName] is False:
+            self.timeObjectivesState[switchName] = True
             target = self.createBox(box, modelName)
-            taskMgr.add(self.timeObject, 'stage1TimedObjective1', extraArgs=[target, switch, time], appendTask=True)
-            self.timeObjectivesState["objectiveCleared"] = False
+            taskMgr.add(self.displayRemainingTime, name + "timer", extraArgs=[time], appendTask = True)
+            taskMgr.doMethodLater(time, self.destroyTimeCreatedBox, switchName + "destroy", extraArgs=[target, switchName], appendTask = True)
         return task.cont
 
-    def timeObject(self, target, switch, time, task):
+    def destroyTimeCreatedBox(self, target, switchName, task):
+        target.node().removeAllChildren()
+        self.world.removeRigidBody(target.node())
+        self.timeObjectivesState[switchName] = False
+        return task.done
+
+    def displayRemainingTime(self, time, task):
+        timeLeft = int(time - task.time)
+        self.textTimeAlert.setText(str(timeLeft))
+        if timeLeft <= 3:
+            self.textTimeAlert.setFg((1, 0, 0, 1))
+        if self.SFXticktock.status() != self.SFXticktock.PLAYING:
+            self.SFXticktock.play()
+        if task.time >= time:
+            if self.SFXticktock.status() == self.SFXticktock.PLAYING:
+                self.SFXticktock.stop()
+            self.textTimeAlert.setFg((1, 1, 1, 1))
+            self.textTimeAlert.setText("")
+            return task.done
+        return task.cont
+
+    def createTimeObjective(self, box, modelName, switch, time, objectiveSwitchName, name, task):
+        if self.timeObjectivesState[name] is False:
+            self.timeObjectivesState[name] = True
+            target = self.createBox(box, modelName)
+            taskMgr.add(self.timeObject, objectiveSwitchName, extraArgs=[target, switch, time, objectiveSwitchName, name], appendTask=True)
+            self.timeObjectivesState[objectiveSwitchName] = False
+        return task.cont
+
+    def timeObject(self, target, switch, time, switchName, name, task):
         collision = self.world.contactTestPair(switch.node(), self.character)
-        if len(collision.getContacts()) > 0 and self.timeObjectivesState["objectiveCleared"] is False:
+        if len(collision.getContacts()) > 0 and self.timeObjectivesState[switchName] is False:
             self.playSfx(self.SFXclick)
-            self.timeObjectivesState["objectiveCleared"] = True
+            self.timeObjectivesState[switchName] = True
             target.node().removeAllChildren()
             self.world.removeRigidBody(target.node())
-            taskMgr.add(self.timeObjectiveTimerRespawn, "stage1RespawnTimer", extraArgs=[time], appendTask=True)
+            taskMgr.add(self.timeObjectiveTimerRespawn, switchName + "timer", extraArgs=[time, name], appendTask=True)
             self.SFXticktock.play()
             return task.done
         return task.cont
 
-    def timeObjectiveTimerRespawn(self, time, task):
+    def timeObjectiveTimerRespawn(self, time, name, task):
         timeLeft = int(time - task.time)
         self.textTimeAlert.setText(str(timeLeft))
         if timeLeft <= 7 and self.peteInteractions["bookIt"]:
@@ -1037,7 +1176,7 @@ class CharacterController(ShowBase):
         if task.time >= time:
             self.textTimeAlert.setText("")
             self.textTimeAlert.setFg((1, 1, 1, 1))
-            self.timeObjectivesState["objectiveSet"] = False
+            self.timeObjectivesState[name] = False
             self.SFXticktock.stop()
             self.textMessageClear()
             return task.done
@@ -1106,12 +1245,8 @@ class CharacterController(ShowBase):
         self.createPete()
 
         #generate the stages
-        #stage 1
-        self.generateStage("Stage/stage1.txt")
-        self.generateCoins("Stage/stage1coins.txt")
-        #Stage1Objectives
-        self.setUpStage1Objectives()
-
+        self.setUpStage1()
+        taskMgr.add(self.ATMRespawnTask, 'ATMrespawnTask')
         # Floor
         # shape = BulletPlaneShape(Vec3(0, 0, 1), 0)
         floorPos = Vec3(0, 0, -2)
@@ -1133,6 +1268,10 @@ class CharacterController(ShowBase):
         testBox2 = Box(2, 2, 2, 10, 10, 2, "hello2")
         self.createBox(testBox, 'brick')
         self.createBox(testBox2, 'stone3')
+
+        #cylinder
+        #testCyn = Box(3, 0, 2, 60, 160, 40, "testCyn")
+        #self.createDisk(testCyn)
 
         #slider
         testSlide = Box(8, 3, 1, -6, -6, 8, "testSlide")
@@ -1191,14 +1330,11 @@ class CharacterController(ShowBase):
             self.world.attachRigidBody(stairNP.node())
         '''
 
-        #checkpoint
-        checkpointpos = Vec3(4, 2, 0)
-        self.createCheckPoint(checkpointpos, 'stage1-checkpoint-1')
-
         #background
         #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/env.egg')
+        ##self.env.setZ(-10000)
         #self.env.reparentTo(render)
-        #self.env.setScale(7000)
+        #self.env.setScale(70000)
 
 
 game = CharacterController()
