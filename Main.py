@@ -224,7 +224,8 @@ class CharacterController(ShowBase):
                 box = Box(x, y, z, px, py, pz, blockName)
                 model = parameters[6]
                 angle = float(parameters[7])
-                self.createSlide(box, angle, model)
+                tilt = float(parameters[8])
+                self.createSlide(box, angle, tilt, model)
 
     def generateCoins(self, fileName):
         counter = 1
@@ -236,8 +237,11 @@ class CharacterController(ShowBase):
                 x = float(parameters[0])
                 y = float(parameters[1])
                 z = float(parameters[2])
+                type = ""
+                if len(parameters) == 4:
+                    type = parameters[3]
                 coinName = fileName.replace('.txt', "") + "-" + str(counter)
-                self.createCoin(Vec3(x,y,z),coinName)
+                self.createCoin(Vec3(x,y,z),coinName, type = type)
 
     def appendToStage(self, x, y, z, px, py, pz, name):
         box = Box(x, y, z, px, py, pz, name)
@@ -247,7 +251,7 @@ class CharacterController(ShowBase):
         #BGM
         self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
         self.BGM2 = self.loadMusic("Resources/BGM/Bramble Blast (Remix).mp3")
-        self.playMusic(self.BGM1, looping=1, volume = 0.4)
+        self.playMusic(self.BGM1, looping=1, volume = 0.2)
 
         #sound effectt
         self.SFXjump = self.loadSfx("Resources/Sound/Jump.mp3")
@@ -259,6 +263,10 @@ class CharacterController(ShowBase):
         self.SFXsniffLong = self.loadSfx("Resources/Sound/Sniff Long.mp3")
         self.SFXticktock = self.loadSfx("Resources/Sound/Tick Tock.mp3")
         self.SFXcheckpoint = self.loadSfx("Resources/Sound/checkpoint.wav")
+        self.SFXfootstep = self.loadSfx("Resources/Sound/footstep.wav")
+        self.SFXfootstep.setVolume(0.3)
+        self.SFXjump.setVolume(0.05)
+        self.SFXdashjump.setVolume(0.05)
 
         #voice
         self.SFXballoons = self.loadSfx("Resources/Voice/balloons.wav")
@@ -405,7 +413,11 @@ class CharacterController(ShowBase):
         self.character.setMaxJumpHeight(6.0)
         self.character.setJumpSpeed(11.0)
         if self.character.isOnGround():
-            self.playSfx(self.SFXjump)
+            self.SFXfootstep.stop()
+            if self.isDashJumping:
+                self.playSfx(self.SFXdashjump)
+            else:
+                self.playSfx(self.SFXjump)
             self.actorNP.play('jump')
             self.animationDashing = False
             self.animationRunning = False
@@ -443,6 +455,7 @@ class CharacterController(ShowBase):
         #idle
         if (inputState.isSet('forward') is False) and (inputState.isSet('reverse') is False) and self.character.isOnGround() and self.animationIdle is False and self.isLanding is False:
             self.actorNP.loop('idle')
+            self.SFXfootstep.stop()
             self.animationIdle = True
             self.animationRunning = False
             self.animationDashing = False
@@ -452,6 +465,7 @@ class CharacterController(ShowBase):
         if self.character.isOnGround() and self.animationLanding is False and self.isLanding:
             self.animationLanding = True
             taskMgr.add(self.landingAnimationTask, 'LandingAnimation')
+            self.SFXfootstep.stop()
         #dashing and running on ground
 
         if (inputState.isSet("forward") or inputState.isSet('reverse')):
@@ -459,6 +473,8 @@ class CharacterController(ShowBase):
                 if self.character.isOnGround():
                     speed.setY(speedForce * 2)
                 if self.animationDashing is False and self.character.isOnGround() and self.isLanding is False:
+                    self.SFXfootstep.setPlayRate(1.5)
+                    self.playSfx(self.SFXfootstep, looping=1)
                     self.actorNP.setPlayRate(1.5, 'run')
                     self.actorNP.loop('run')
                     self.landingAnimation = False
@@ -475,6 +491,8 @@ class CharacterController(ShowBase):
                 self.actorNP.setPlayRate(1, 'run')
                 if self.animationRunning is False and self.character.isOnGround() and self.isLanding is False:
                     self.actorNP.loop('run')
+                    self.SFXfootstep.setPlayRate(1)
+                    self.playSfx(self.SFXfootstep, looping=1)
                     self.landingAnimation = False
                     self.animationIdle = False
                     self.animationRunning = True
@@ -681,7 +699,7 @@ class CharacterController(ShowBase):
         smileyFace.setScale(radius)
         return sphere
 
-    def createCoin(self, pos, name):
+    def createCoin(self, pos, name, type=""):
         shape = BulletSphereShape(0.6)
         node = BulletRigidBodyNode(name)
         node.setMass(0)
@@ -691,29 +709,37 @@ class CharacterController(ShowBase):
         smileyFace = self.loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/smiley/smiley.egg')
         smileyFace.reparentTo(coin)
         smileyFace.setScale(1)
-        smileyFace.setColorScale(1,1, 0, 1)
-        taskMgr.add(self.coinSpinTask, "coinTask1", extraArgs=[coin, smileyFace, node], appendTask = True)
+        #smileyFace.setColorScale(1,1, 0, 1)
+        if type == "battery":
+            smileyFace.setColorScale(0,0,1,1)
+        taskMgr.add(self.coinSpinTask, "coinTask1", extraArgs=[coin, type, node], appendTask = True)
 
-    def coinSpinTask(self, coin, coinPos, node, task):
+    def coinSpinTask(self, coin, type, node, task):
+        spinConstant = 15
         angleDegrees = task.time * 6.0
         angleRadians = angleDegrees * (pi / 180.0)
         # self.camera.setPos(20 * sin(angleRadians), -20.0 * cos(angleRadians), 3)
-        coin.setHpr(angleDegrees * 15, 0, 0)
+        if type == "battery":
+            spinConstant = 100
+        coin.setHpr(angleDegrees * spinConstant, 0, 0)
         collisions = self.world.contactTestPair(coin.node(), self.character)
         #if coinPos.getDistance(self.characterNP) <= 2:
         if len(collisions.getContacts()) > 0:
             node.removeAllChildren()
-            self.updateScore(100)
-            self.playSfx(self.SFXpop)
+            if type == "battery":
+                self.updateLife(1)
+            else:
+                self.updateScore(100)
+                self.playSfx(self.SFXpop)
             return task.done
         return task.cont
 
-    def createSlide(self, box, h, modelName):
+    def createSlide(self, box, h, tilt, modelName):
         boxSize = box.getSize()
         shape = BulletBoxShape(boxSize)
         boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
         boxNP.node().addShape(shape)
-        boxNP.setR(-46)
+        boxNP.setR(tilt)
         boxNP.setH(h)
         boxNP.setPos(box.getPosition())
         boxNP.setCollideMask(BitMask32.allOn())
@@ -1014,8 +1040,9 @@ class CharacterController(ShowBase):
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        self.characterNP.setPos(12, 55, 4)
-        #self.characterNP.setPos(-10, 260, 36)
+        #self.characterNP.setPos(12, 55, 4)
+        #self.characterNP.setPos(-20, 311, 40)
+        self.characterNP.setPos(10, 276, 28)
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
@@ -1041,7 +1068,6 @@ class CharacterController(ShowBase):
             self.respawnATM()
             selector = random.randint(1, len(self.SFXfallRespawnDict))
             self.playSfx(self.SFXfallRespawnDict[str(selector)])
-            print selector
         return task.cont
 
     def setUpStage1(self):
@@ -1275,7 +1301,7 @@ class CharacterController(ShowBase):
 
         #slider
         testSlide = Box(8, 3, 1, -6, -6, 8, "testSlide")
-        self.createSlide(testSlide, 5, 'iron')
+        self.createSlide(testSlide, 5, -46, 'iron')
 
         self.createFourWalls()
         self.addBall(3, 'ball1', -5, 6, 10, 0.000000000000001)
