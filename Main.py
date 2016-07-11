@@ -111,6 +111,7 @@ class CharacterController(ShowBase):
         #self.isRunningAndJumpingAndLanding = False
         #self.isLandedFromRun = False
         #animation switches
+        self.gameOver = False
         self.animationRunning = False
         self.animationDashing = False
         self.animationIdle = False
@@ -141,7 +142,7 @@ class CharacterController(ShowBase):
             "fourthDialogue-stage1" : False,
             "doorDestroyed" : False,
             "bookIt" : False,
-            "grandPillarSpawn" : True
+            "grandPillarSpawn" : False
         }
         self.peteInteractionsDialogueSwitches = {
             "switch1" : False,
@@ -253,7 +254,7 @@ class CharacterController(ShowBase):
         #BGM
         self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
         self.BGM2 = self.loadMusic("Resources/BGM/Bramble Blast (Remix).mp3")
-        self.playMusic(self.BGM1, looping=1, volume = 0.2)
+        self.playMusic(self.BGM1, looping=1, volume = 0.1)
 
         #sound effectt
         self.SFXjump = self.loadSfx("Resources/Sound/Jump.mp3")
@@ -414,8 +415,10 @@ class CharacterController(ShowBase):
         self.isJumping = True
     '''
     def doJump(self):
-        self.character.setMaxJumpHeight(6.0)
-        self.character.setJumpSpeed(11.0)
+        #self.character.setMaxJumpHeight(6.0)
+        #self.character.setJumpSpeed(11.0)
+        self.character.setMaxJumpHeight(20.0)
+        self.character.setJumpSpeed(15.0)
         if self.character.isOnGround():
             self.SFXfootstep.stop()
             if self.isDashJumping:
@@ -511,8 +514,9 @@ class CharacterController(ShowBase):
 
 
         #additional controls
-        self.character.setAngularMovement(omega)
-        self.character.setLinearMovement(speed, True)
+        if self.gameOver is False:
+            self.character.setAngularMovement(omega)
+            self.character.setLinearMovement(speed, True)
 
         if inputState.isSet('autoCameraOn'): self.cameraAutoTurn = True
         if inputState.isSet('autoCameraOff'): self.cameraAutoTurn = False
@@ -872,6 +876,9 @@ class CharacterController(ShowBase):
             self.checkPointDict[name] = True
             self.respawnPoint = boxNP.getPos()
             self.playSfx(self.SFXcheckpoint)
+            if self.checkPointDict["stage1-checkpoint-3"]:
+                self.textGameOver = OnscreenText(text="STAGE 1 COMPLETED!", style=1, fg=(1, 1, 0, 1), pos=(0, 0),
+                                                 align=TextNode.ACenter, scale=0.2)
         if self.checkPointDict[name]:
             angleDegrees = task.time * 6.0
             checkPoint.setHpr(angleDegrees * 200, 0, 0)
@@ -1071,6 +1078,7 @@ class CharacterController(ShowBase):
     def peteGrandPillarRespawn(self, task):
         if self.peteInteractions["grandPillarSpawn"]:
             self.peteNP.setPos(40, 395, 24)
+            self.clearPeteDialogueSwitches()
             taskMgr.add(self.peteFourthTask, "stage1petefourthdialogue")
             return task.done
         return task.cont
@@ -1101,13 +1109,14 @@ class CharacterController(ShowBase):
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        #self.characterNP.setPos(12, 55, 4)
+        self.characterNP.setPos(12, 55, 4)
         #self.characterNP.setPos(26.5, 316, 50)
         #self.characterNP.setPos(40, 395, 24)
-        self.characterNP.setPos(160, 335, 22)
+        #self.characterNP.setPos(160, 335, 22)
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
+        #self.character.setGravity(20)
 
         self.actorNP = Actor('Resources/Models/ModelCollection/Actors/robot/lack.egg', {
             'run': 'Resources/Models/ModelCollection/Actors/robot/lack-run.egg',
@@ -1130,6 +1139,12 @@ class CharacterController(ShowBase):
             self.respawnATM()
             selector = random.randint(1, len(self.SFXfallRespawnDict))
             self.playSfx(self.SFXfallRespawnDict[str(selector)])
+        elif self.characterNP.getZ() <= -60 and self.respawning is False and self.playerLives == 1:
+            self.textGameOver = OnscreenText(text="GAME OVER", style=1, fg=(1, 0, 0, 1), pos=(0, 0),
+                                              align=TextNode.ACenter, scale=0.5)
+            self.gameOver = True
+            self.respawnATM()
+
         return task.cont
 
     def setUpStage1(self):
@@ -1494,7 +1509,7 @@ class CharacterController(ShowBase):
 
         #background
         #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/env.egg')
-        ##self.env.setZ(-10000)
+        #self.env.setZ(-10000)
         #self.env.reparentTo(render)
         #self.env.setScale(70000)
 
