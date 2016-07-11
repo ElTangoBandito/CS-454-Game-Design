@@ -129,7 +129,6 @@ class CharacterController(ShowBase):
         self.playerScore = 0
         self.switchScoreToLife = False
         # self.playerHealth = 3
-
         #Pete's switches and other stuff
         #self.peteIsActive = False
         #self.peteIdentifer = 0
@@ -139,8 +138,10 @@ class CharacterController(ShowBase):
             "firstDialogue-Stage1" : False,
             "secondDialogue-Stage1" : False,
             "thirdDialogue-Stage1" : False,
+            "fourthDialogue-stage1" : False,
             "doorDestroyed" : False,
-            "bookIt" : False
+            "bookIt" : False,
+            "grandPillarSpawn" : True
         }
         self.peteInteractionsDialogueSwitches = {
             "switch1" : False,
@@ -156,7 +157,8 @@ class CharacterController(ShowBase):
         self.respawning = False
         self.checkPointDict = {
             "stage1-checkpoint-1" : False,
-            "stage1-checkpoint-2" : False
+            "stage1-checkpoint-2" : False,
+            "stage1-checkpoint-3" : False
         }
 
         #On Screen Texts
@@ -273,6 +275,8 @@ class CharacterController(ShowBase):
         self.SFXunknown = self.loadSfx("Resources/Voice/unknown.wav")
         self.SFXacknowledged = self.loadSfx("Resources/Voice/acknowledged.wav")
         self.SFXbattery = self.loadSfx("Resources/Voice/battery.wav")
+        self.SFXniceToMeetYou = self.loadSfx("Resources/Voice/nice to meet you.wav")
+        self.SFXintroduction = self.loadSfx("Resources/Voice/introduction.wav")
         self.SFXfall1 = self.loadSfx("Resources/Voice/fall respawn1.wav")
         self.SFXfall2 = self.loadSfx("Resources/Voice/fall respawn2.wav")
         self.SFXfall3 = self.loadSfx("Resources/Voice/fall respawn3.wav")
@@ -766,7 +770,7 @@ class CharacterController(ShowBase):
         boxModelNP.setScale(3)
         return boxNP
 
-    def createBox(self, box, modelName):
+    def createBox(self, box, modelName, color = ""):
         boxSize = box.getSize()
         shape = BulletBoxShape(boxSize)
         boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
@@ -783,17 +787,25 @@ class CharacterController(ShowBase):
             boxModelNP.reparentTo(boxNP)
             boxModelNP.setPos(0, 0, - boxSize.z)
             boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+            #random colorize everything, just for fun
+            #boxModelNP.setColorScale(random.random(), random.random(), random.random(), 1)
+        if color == "orange":
+            boxModelNP.setColorScale(0.8, 0.5, 0.5, 1)
+        elif color == "blue":
+            boxModelNP.setColorScale(0.3, 0.3, 1, 1)
+        elif color == "teal":
+            boxModelNP.setColorScale(0, 0.6, 0.7, 1)
         return boxNP
         # boxNP.node().removeAllChildren()
         # self.world.removeRigidBody(boxNP.node())
 
-    def createInvisibleBox(selfself, box):
+    def createInvisibleBox(self, box):
         boxSize = box.getSize()
         shape = BulletBoxShape(boxSize)
         boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
         boxNP.node().addShape(shape)
         boxNP.setPos(box.getPosition())
-        boxNP.setCollideMask(BitMask32.allOn())
+        boxNP.setCollideMask(BitMask32.allOff())
         self.world.attachRigidBody(boxNP.node())
 
         # boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
@@ -849,7 +861,7 @@ class CharacterController(ShowBase):
 
         boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/spinner/spinner.egg')
         boxModelNP.reparentTo(boxNP)
-        boxModelNP.setPos(0, 0, 0)
+        boxModelNP.setPos(0, 0, -2)
         boxModelNP.setScale(0.2, 0.2, 0.4)
         taskMgr.add(self.checkPointSpinTask, name, extraArgs=[boxNP, boxModelNP, name], appendTask=True)
 
@@ -895,6 +907,7 @@ class CharacterController(ShowBase):
         self.peteIdentifer = 1
         self.peteIsActive = True
         taskMgr.add(self.peteFirstTask, 'firstPeteTask')
+        taskMgr.add(self.peteGrandPillarRespawn, "peteGrandPillarRespawn")
 
     def peteFirstTask(self, task):
         if self.peteActorNP.getDistance(self.characterNP) <= 18:
@@ -911,6 +924,8 @@ class CharacterController(ShowBase):
             #taskMgr.add(self.peteSecondTask, "secondPeteTask")
             #self.peteInteractions["doorDestroyed"] = False
             return task.done
+        if self.peteInteractions["grandPillarSpawn"] is True:
+            return task.done
         return task.cont
 
     def peteSecondTask(self, task):
@@ -923,6 +938,8 @@ class CharacterController(ShowBase):
         if self.peteInteractions["doorDestroyed"]:
             #self.pete.setAngularMovement(150)
             return task.done
+        if self.peteInteractions["grandPillarSpawn"] is True:
+            return task.done
 
         return task.cont
 
@@ -933,8 +950,18 @@ class CharacterController(ShowBase):
             if self.peteInteractions["thirdDialogue-Stage1"] is False:
                 self.peteInteractions["thirdDialogue-Stage1"] = True
                 taskMgr.add(self.peteStage1ThirdDialogue, "peteStage1ThirdDialogue")
-        if self.checkPointDict["stage1-checkpoint-1"]:
+        if self.peteInteractions["grandPillarSpawn"]:
+            #self.peteNP.setPos(-17, 383, -17)
             return task.done
+        return task.cont
+
+    def peteFourthTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 8:
+            self.peteActorNP.lookAt(self.characterNP)
+            self.peteActorNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
+            if self.peteInteractions["fourthDialogue-stage1"] is False:
+                self.peteInteractions["fourthDialogue-stage1"] = True
+                taskMgr.add(self.peteStage1FourthDialogue, "peteFourthDialogueStage1")
         return task.cont
 
     def peteWalkOutCell(self, task):
@@ -972,6 +999,8 @@ class CharacterController(ShowBase):
             self.peteInteractions["doorDestroyed"] = False
             taskMgr.add(self.peteSecondTask, "secondPeteTask")
             return task.done
+        if self.peteInteractions["grandPillarSpawn"] is True:
+            return task.done
         return task.cont
 
     def peteStage1SecondDialogue(self, task):
@@ -993,6 +1022,8 @@ class CharacterController(ShowBase):
             self.clearPeteDialogueSwitches()
             taskMgr.add(self.peteWalkOutCell, 'peteEscapeTask')
             return task.done
+        if self.peteInteractions["grandPillarSpawn"] is True:
+            return task.done
         return task.cont
 
     def peteStage1ThirdDialogue(self,task):
@@ -1010,7 +1041,37 @@ class CharacterController(ShowBase):
             self.peteInteractionsDialogueSwitches["switch3"] = True
             self.peteInteractions["bookIt"] = True
             self.textMessageClear()
-        if self.checkPointDict["stage1-checkpoint-1"] is True:
+        if self.peteInteractions["grandPillarSpawn"] is True:
+            return task.done
+        return task.cont
+
+    def peteStage1FourthDialogue(self, task):
+        text = "Pete:"
+        if self.peteInteractionsDialogueSwitches["switch1"] is False:
+            self.peteInteractionsDialogueSwitches["switch1"] = True
+            self.textMessageSpeak(text + " Oh! Hello. I forgot to tell you my name last time.", line2="My name is Pete.")
+        if task.time > 5 and self.peteInteractionsDialogueSwitches["switch2"] is False:
+            self.playSfx(self.SFXniceToMeetYou)
+            self.peteInteractionsDialogueSwitches["switch2"] = True
+        if task.time > 8 and self.peteInteractionsDialogueSwitches["switch3"] is False:
+            self.playSfx(self.SFXintroduction)
+            self.peteInteractionsDialogueSwitches["switch3"] = True
+            self.textMessageClear()
+        if task.time > 11 and self.peteInteractionsDialogueSwitches["switch4"] is False:
+            self.peteInteractionsDialogueSwitches["switch4"] = True
+            self.textMessageSpeak(text + "See that tiny bridge? Don't look down when you're on it, ATM.", line2="I think I'll cross it later.")
+        if task.time > 24 and self.peteInteractionsDialogueSwitches["switch5"] is False:
+            self.peteInteractionsDialogueSwitches["switch5"] = True
+            self.textMessageClear()
+            self.updateLife(1)
+            self.clearPeteDialogueSwitches()
+            return task.done
+        return task.cont
+
+    def peteGrandPillarRespawn(self, task):
+        if self.peteInteractions["grandPillarSpawn"]:
+            self.peteNP.setPos(40, 395, 24)
+            taskMgr.add(self.peteFourthTask, "stage1petefourthdialogue")
             return task.done
         return task.cont
 
@@ -1041,8 +1102,9 @@ class CharacterController(ShowBase):
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
         #self.characterNP.setPos(12, 55, 4)
-        #self.characterNP.setPos(-20, 311, 40)
-        self.characterNP.setPos(10, 276, 28)
+        #self.characterNP.setPos(26.5, 316, 50)
+        #self.characterNP.setPos(40, 395, 24)
+        self.characterNP.setPos(160, 335, 22)
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
@@ -1079,14 +1141,37 @@ class CharacterController(ShowBase):
         self.setUpStage1ThirdObjective()
         self.setUpStage1FourthObjective()
         self.setUpStage1FifthObjective()
+        #4, 0.2, 1.2, -17, 315, 19.8, sand
+        #5, 5, 12, -2, 290, 30, sand
+        box = Box(5, 5, 12, -2, 290, 30, "stage1-objective6-timed")
+        switchVec = Vec3(-3, 270, 18.5)
+        self.timeObjectiveReverseGeneral(box, "stage1-objective6-timed", switchVec, 31)
+        #2, 8, 0.2, 48, 290, 36, sand
+        box = Box(2, 8, 0.2, 48, 290, 36, "stage1-objective7-timed")
+        switchVec = Vec3(44, 268, 36.2)
+        self.timeObjectiveReverseGeneral(box, "stage1-objective7-timed", switchVec, 8)
+        #14, 5, 0.5, -3, 253, 43, sand
+        box = Box(14, 5, 0.5, -3, 253, 43, "stage1-objective8-timed")
+        switchVec = Vec3(24, 247, 43.2)
+        self.timeObjectiveReverseGeneral(box, "stage1-objective8-timed", switchVec, 14)
+        self.setUpStage1SixthObjective()
+        self.setUpStage1SeventhObjective()
+        box = Box(6, 6, 6, 26.5, 316, 46, 'stage1invisiblecheckpoint1')
+        invisibleBox = self.createInvisibleBox(box)
+        taskMgr.add(self.setUpStage1InvisibleCheckPoint, "stage1invisiblecheckpoint1", extraArgs=[invisibleBox], appendTask = True)
+        self.setUpStage1EigthObjective()
 
         #checkpoints
-        checkpointpos = Vec3(26, 171, 1)
+        checkpointpos = Vec3(26, 171, 3)
         self.createCheckPoint(checkpointpos, 'stage1-checkpoint-1')
+        checkpointpos = Vec3(26, 383, -20)
+        self.createCheckPoint(checkpointpos, 'stage1-checkpoint-2')
+        checkpointpos = Vec3(160, 335, 22)
+        self.createCheckPoint(checkpointpos, "stage1-checkpoint-3")
 
     def setUpStage1FirstObjective(self):
         box = Box(1, 5, 8, -4, 76, 8, "stage1-objective1-unlockdoor1")
-        target = self.createBox(box, 'sand')
+        target = self.createBox(box, 'sand', color="teal")
         objectiveTest = Box(2, 3.5, 0.5, 28, 36, -1, "stage1-objblock-1")
         keyBallPosition = Vec3(3, 54, 2)
         stage1Objective1 = self.createObjective(objectiveTest, 'stage1-objective-1', self.stage1Objective,
@@ -1096,7 +1181,7 @@ class CharacterController(ShowBase):
     def setUpStage1SecondObjective(self):
         #2, 1, 1.75, -10, 69, 1.75, sand
         box = Box(2, 1, 2.75, -10, 69, 2.75, "stage1-objective2-unlockdoor1")
-        target = self.createBox(box, 'sand')
+        target = self.createBox(box, 'sand', color="teal")
         #1, 2, 1, -67, 85, -1, brick
         objectiveTest = Box(1, 2, 1, -67, 85, -1, "stage1-objblock-2")
         keyBallPosition = Vec3(-28, 67, 14)
@@ -1139,11 +1224,62 @@ class CharacterController(ShowBase):
         taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, 16, switchName, name],
                     appendTask=True)
 
+    def setUpStage1SixthObjective(self):
+        #5.5, 1, 4, 26.5, 316, 46, sand
+        box = Box(5.5, 1, 4, 26.5, 316, 46, "stage1-objective9-unlockdoor1")
+        target = self.createBox(box, 'sand', color = "teal")
+        #3, 1, 1, 45, 243, 17, sand
+        objectiveTest = Box(3, 1, 1, 45, 243, 17, "stage1-objblock-9")
+        keyBallPosition = Vec3(46, 311, 39)
+        stage1Objective1 = self.createObjective(objectiveTest, 'stage1-objective-9', self.stage1Objective,
+                                                keyBallPosition, test=False)
+        taskMgr.add(self.objectiveDestroyBox, 'name', extraArgs=[stage1Objective1[0], stage1Objective1[1], target],
+                    appendTask=True)
+
+    def setUpStage1SeventhObjective(self):
+        # 0.5, 3, 1, -25.5, 383, -14, sand
+        name = "stage1-objective10-unlockdoor1-task"
+        box = Box(0.5, 3, 1, -25.5, 383, -14, "stage1-objective10-unlockdoor1")
+        target = self.createBox(box, 'sand', color="teal")
+        # 1, 5, 0.5, -28, 383, -24.5, sand
+        objectiveTest = Box(1, 5, 0.5, -28, 383, -24.5, "stage1-objblock-10")
+        keyBallPosition = Vec3(-25, 311, 42)
+        stage1Objective1 = self.createObjective(objectiveTest, 'stage1-objective-10', self.stage1Objective,
+                                                keyBallPosition, test=False)
+        taskMgr.add(self.objectiveDestroyBox, name, extraArgs=[stage1Objective1[0], stage1Objective1[1], target],
+                    appendTask=True)
+
+    def setUpStage1EigthObjective(self):
+        name = "stage1-objective9-timed1"
+        switchName = name + "switch"
+        box = Box(1, 16, 15, 130, 335, 20, name)
+        switch = self.createTimeSwitch(Vec3(103, 335, 20), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjective, name, extraArgs=[box, 'sand', switch, 16, switchName, name],
+                    appendTask=True)
+
+    def setUpStage1InvisibleCheckPoint(self, box, task):
+        collision = self.world.contactTestPair(box.node(), self.character)
+        if len(collision.getContacts()) > 0:
+            self.peteInteractions["grandPillarSpawn"] = True
+            return task.done
+        return task.cont
+
+    def timeObjectiveReverseGeneral(self, boxIn, name, switchVec, time):
+        switchName = name + "switch"
+        box = boxIn
+        switch = self.createTimeSwitch(switchVec, switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, time, switchName, name],
+                    appendTask=True)
+
     def createTimeObjectiveReverse(self, box, modelName, switch, time, switchName, name, task):
         collision = self.world.contactTestPair(switch.node(), self.character)
         if len(collision.getContacts()) > 0 and self.timeObjectivesState[switchName] is False:
             self.timeObjectivesState[switchName] = True
-            target = self.createBox(box, modelName)
+            target = self.createBox(box, modelName, color="blue")
             taskMgr.add(self.displayRemainingTime, name + "timer", extraArgs=[time], appendTask = True)
             taskMgr.doMethodLater(time, self.destroyTimeCreatedBox, switchName + "destroy", extraArgs=[target, switchName], appendTask = True)
         return task.cont
@@ -1172,7 +1308,7 @@ class CharacterController(ShowBase):
     def createTimeObjective(self, box, modelName, switch, time, objectiveSwitchName, name, task):
         if self.timeObjectivesState[name] is False:
             self.timeObjectivesState[name] = True
-            target = self.createBox(box, modelName)
+            target = self.createBox(box, modelName, color="orange")
             taskMgr.add(self.timeObject, objectiveSwitchName, extraArgs=[target, switch, time, objectiveSwitchName, name], appendTask=True)
             self.timeObjectivesState[objectiveSwitchName] = False
         return task.cont
