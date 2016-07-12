@@ -49,7 +49,7 @@ class CharacterController(ShowBase):
         # Input
         self.accept('escape', self.doExit)
         #self.accept('r', self.doReset)
-        self.accept('f3', self.toggleDebug)
+        #self.accept('f3', self.toggleDebug)
         self.accept('space', self.doJump)
 
         inputState.watchWithModifiers('forward', 'w')
@@ -177,18 +177,10 @@ class CharacterController(ShowBase):
         self.ATMPosY = self.characterNP.getY()
         self.ATMPosZ = self.characterNP.getZ()
         self.ATMPos = "(" + str(self.ATMPosX) + ", " + str(self.ATMPosY) + ", " + str(self.ATMPosZ) + ")"
-        self.ATMPoisitionMonitorText = OnscreenText(text=self.ATMPos, style = 1, fg=(1,1,1,1), pos = (1.3,-0.95), align=TextNode.A_right, scale = 0.08)
-        taskMgr.add(self.ATMPositionMonitor, "playerPositionMonitor")
+        #self.ATMPoisitionMonitorText = OnscreenText(text=self.ATMPos, style = 1, fg=(1,1,1,1), pos = (1.3,-0.95), align=TextNode.A_right, scale = 0.08)
+        #taskMgr.add(self.ATMPositionMonitor, "playerPositionMonitor")
 
         #self.HUDTexts[1].setText("test")
-
-        #movingplatforms
-        #Music & Sounds
-        #self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
-        #self.playMusic(self.BGM1, looping=1)
-        #self.SFXjump = self.loadSfx("Resources/Sound/Jump.mp3")
-        #self.SFXdashjump = self.loadSfx("Resources/Sound/Dash Jump.mp3")
-        #self.SFXRun = self.loadSfx("Resources/Sound/running.mp3")
 
     def generateStage(self, fileName):
         counter = 1
