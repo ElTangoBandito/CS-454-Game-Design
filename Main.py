@@ -48,9 +48,8 @@ class CharacterController(ShowBase):
         self.setupLights()
         # Input
         self.accept('escape', self.doExit)
-        self.accept('r', self.doReset)
+        #self.accept('r', self.doReset)
         self.accept('f3', self.toggleDebug)
-        #self.accept('space', self.doJump)
         self.accept('space', self.doJump)
 
         inputState.watchWithModifiers('forward', 'w')
@@ -159,7 +158,8 @@ class CharacterController(ShowBase):
         self.checkPointDict = {
             "stage1-checkpoint-1" : False,
             "stage1-checkpoint-2" : False,
-            "stage1-checkpoint-3" : False
+            "stage1-checkpoint-3" : False,
+            "stage1-checkpoint-4" : False
         }
 
         #On Screen Texts
@@ -264,12 +264,13 @@ class CharacterController(ShowBase):
         self.SFXlifeUp = self.loadSfx("Resources/Sound/Life Up.wav")
         self.SFXsniffShort = self.loadSfx("Resources/Sound/Sniff Short.mp3")
         self.SFXsniffLong = self.loadSfx("Resources/Sound/Sniff Long.mp3")
-        self.SFXticktock = self.loadSfx("Resources/Sound/Tick Tock.mp3")
+        self.SFXticktock = self.loadSfx("Resources/Sound/Tick Tock.wav")
         self.SFXcheckpoint = self.loadSfx("Resources/Sound/checkpoint.wav")
         self.SFXfootstep = self.loadSfx("Resources/Sound/footstep.wav")
         self.SFXfootstep.setVolume(0.3)
         self.SFXjump.setVolume(0.05)
         self.SFXdashjump.setVolume(0.05)
+        self.SFXcheckpoint.setVolume(0.3)
 
         #voice
         self.SFXballoons = self.loadSfx("Resources/Voice/balloons.wav")
@@ -377,7 +378,7 @@ class CharacterController(ShowBase):
         if amount > 0:
             self.playSfx(self.SFXlifeUp, volume = 0.1)
         self.playerLives += amount
-        lifeMsg = "Lives: " + str(self.playerLives)
+        lifeMsg = "Batteries: " + str(self.playerLives)
         self.HUDTexts[0].setText(lifeMsg)
 
     def doExit(self):
@@ -418,7 +419,7 @@ class CharacterController(ShowBase):
         #self.character.setMaxJumpHeight(6.0)
         #self.character.setJumpSpeed(11.0)
         self.character.setMaxJumpHeight(20.0)
-        self.character.setJumpSpeed(15.0)
+        self.character.setJumpSpeed(18.0)
         if self.character.isOnGround():
             self.SFXfootstep.stop()
             if self.isDashJumping:
@@ -876,7 +877,7 @@ class CharacterController(ShowBase):
             self.checkPointDict[name] = True
             self.respawnPoint = boxNP.getPos()
             self.playSfx(self.SFXcheckpoint)
-            if self.checkPointDict["stage1-checkpoint-3"]:
+            if self.checkPointDict["stage1-checkpoint-4"]:
                 self.textGameOver = OnscreenText(text="STAGE 1 COMPLETED!", style=1, fg=(1, 1, 0, 1), pos=(0, 0),
                                                  align=TextNode.ACenter, scale=0.2)
         if self.checkPointDict[name]:
@@ -989,13 +990,13 @@ class CharacterController(ShowBase):
             self.textMessageSpeak(text + "Hey!")
         if task.time > 5 and self.peteInteractionsDialogueSwitches["switch2"] is False:
             self.peteInteractionsDialogueSwitches["switch2"] = True
-            self.textMessageSpeak(text +  "It looks like you're trapped too. Its kind of hard to see in here.", line2= "Try holding  down [Q] and [E].")
+            self.textMessageSpeak(text +  "It looks like you're trapped too. Its kind of hard to see in here.", line2= "Try holding  down [Q] and [E] or [F1] to see what you can do!")
         if task.time > 14 and self.peteInteractionsDialogueSwitches["switch3"] is False:
             self.peteInteractionsDialogueSwitches["switch3"] = True
             self.textMessageClear()
         if task.time > 34 and self.peteInteractionsDialogueSwitches['switch4'] is False and self.peteInteractions["doorDestroyed"] is False:
             self.peteInteractionsDialogueSwitches["switch4"] = True
-            self.textMessageSpeak(text + "See that hole in the corner? It looks pretty suspicious.")
+            self.textMessageSpeak(text + "See that hole in the corner? It looks pretty suspicious.", line2="Try pushing that ball into it.")
         if task.time > 44 and self.peteInteractions["doorDestroyed"] is False and self.peteInteractionsDialogueSwitches["switch5"] is False:
             self.peteInteractionsDialogueSwitches["switch5"] = True
             self.textMessageClear()
@@ -1019,8 +1020,8 @@ class CharacterController(ShowBase):
             self.playSfx(self.SFXacknowledged)
             self.peteInteractionsDialogueSwitches["switch2"] = True
             self.textMessageClear()
-            self.textMessageSpeak(text + "Try looking around, you can move your camera with the arrow keys.")
-        if task.time > 16 and self.peteInteractionsDialogueSwitches["switch3"] is False:
+            self.textMessageSpeak(text + "Try looking around, you can move your camera with the arrow keys.", line2="You can hold down [W] [SHIFT] [SPACE] to jump further.")
+        if task.time > 20 and self.peteInteractionsDialogueSwitches["switch3"] is False:
             self.peteInteractionsDialogueSwitches["switch3"] = True
             self.textMessageClear()
         if self.peteInteractions["doorDestroyed"]:
@@ -1035,6 +1036,8 @@ class CharacterController(ShowBase):
 
     def peteStage1ThirdDialogue(self,task):
         text = "Talking Panda: "
+        if self.peteInteractions["grandPillarSpawn"] is True:
+            return task.done
         if self.peteInteractionsDialogueSwitches["switch1"] is False:
             self.peteInteractionsDialogueSwitches["switch1"] = True
             self.textMessageSpeak(text + "Hey, you are awesome! I like you, have a battery.", line2="The exit's still blocked though...")
@@ -1048,7 +1051,6 @@ class CharacterController(ShowBase):
             self.peteInteractionsDialogueSwitches["switch3"] = True
             self.peteInteractions["bookIt"] = True
             self.textMessageClear()
-        if self.peteInteractions["grandPillarSpawn"] is True:
             return task.done
         return task.cont
 
@@ -1066,7 +1068,7 @@ class CharacterController(ShowBase):
             self.textMessageClear()
         if task.time > 11 and self.peteInteractionsDialogueSwitches["switch4"] is False:
             self.peteInteractionsDialogueSwitches["switch4"] = True
-            self.textMessageSpeak(text + "See that tiny bridge? Don't look down when you're on it, ATM.", line2="I think I'll cross it later.")
+            self.textMessageSpeak(text + " See that tiny bridge? Don't look down when you're on it, ATM.", line2="You got this ATM! I'll supervise you from here.")
         if task.time > 24 and self.peteInteractionsDialogueSwitches["switch5"] is False:
             self.peteInteractionsDialogueSwitches["switch5"] = True
             self.textMessageClear()
@@ -1113,10 +1115,11 @@ class CharacterController(ShowBase):
         #self.characterNP.setPos(26.5, 316, 50)
         #self.characterNP.setPos(40, 395, 24)
         #self.characterNP.setPos(160, 335, 22)
+        #self.characterNP.setPos(97, 335, 24)
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
-        #self.character.setGravity(20)
+        self.character.setGravity(22)
 
         self.actorNP = Actor('Resources/Models/ModelCollection/Actors/robot/lack.egg', {
             'run': 'Resources/Models/ModelCollection/Actors/robot/lack-run.egg',
@@ -1181,8 +1184,10 @@ class CharacterController(ShowBase):
         self.createCheckPoint(checkpointpos, 'stage1-checkpoint-1')
         checkpointpos = Vec3(26, 383, -20)
         self.createCheckPoint(checkpointpos, 'stage1-checkpoint-2')
-        checkpointpos = Vec3(160, 335, 22)
+        checkpointpos = Vec3(100,395,22)
         self.createCheckPoint(checkpointpos, "stage1-checkpoint-3")
+        checkpointpos = Vec3(160, 335, 22)
+        self.createCheckPoint(checkpointpos, "stage1-checkpoint-4")
 
     def setUpStage1FirstObjective(self):
         box = Box(1, 5, 8, -4, 76, 8, "stage1-objective1-unlockdoor1")
@@ -1271,7 +1276,7 @@ class CharacterController(ShowBase):
         switch = self.createTimeSwitch(Vec3(103, 335, 20), switchName)
         self.timeObjectivesState[switchName] = False
         self.timeObjectivesState[name] = False
-        taskMgr.add(self.createTimeObjective, name, extraArgs=[box, 'sand', switch, 16, switchName, name],
+        taskMgr.add(self.createTimeObjective, name, extraArgs=[box, 'sand', switch, 18, switchName, name],
                     appendTask=True)
 
     def setUpStage1InvisibleCheckPoint(self, box, task):
@@ -1310,6 +1315,8 @@ class CharacterController(ShowBase):
         self.textTimeAlert.setText(str(timeLeft))
         if timeLeft <= 3:
             self.textTimeAlert.setFg((1, 0, 0, 1))
+            self.SFXticktock.setPlayRate(1.4)
+        else: self.SFXticktock.setPlayRate(1)
         if self.SFXticktock.status() != self.SFXticktock.PLAYING:
             self.SFXticktock.play()
         if task.time >= time:
@@ -1336,7 +1343,6 @@ class CharacterController(ShowBase):
             target.node().removeAllChildren()
             self.world.removeRigidBody(target.node())
             taskMgr.add(self.timeObjectiveTimerRespawn, switchName + "timer", extraArgs=[time, name], appendTask=True)
-            self.SFXticktock.play()
             return task.done
         return task.cont
 
@@ -1350,6 +1356,8 @@ class CharacterController(ShowBase):
             self.SFXticktock.play()
         if timeLeft <= 3:
             self.textTimeAlert.setFg((1,0,0,1))
+            self.SFXticktock.setPlayRate(1.4)
+        else: self.SFXticktock.setPlayRate(1)
         if task.time >= time:
             self.textTimeAlert.setText("")
             self.textTimeAlert.setFg((1, 1, 1, 1))
@@ -1412,7 +1420,7 @@ class CharacterController(ShowBase):
 
         # World
         self.debugNP = self.render.attachNewNode(BulletDebugNode('Debug'))
-        self.debugNP.show()
+        #self.debugNP.show()
 
         self.world = BulletWorld()
         self.world.setGravity(Vec3(0, 0, -9.81))
