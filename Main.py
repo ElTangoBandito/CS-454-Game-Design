@@ -9,6 +9,7 @@ from direct.showbase.InputStateGlobal import inputState
 
 from panda3d.core import AmbientLight
 from panda3d.core import DirectionalLight
+from panda3d.core import PointLight
 from panda3d.core import Vec3
 from panda3d.core import Vec4
 from panda3d.core import Point3
@@ -177,8 +178,8 @@ class CharacterController(ShowBase):
         self.ATMPosY = self.characterNP.getY()
         self.ATMPosZ = self.characterNP.getZ()
         self.ATMPos = "(" + str(self.ATMPosX) + ", " + str(self.ATMPosY) + ", " + str(self.ATMPosZ) + ")"
-        #self.ATMPoisitionMonitorText = OnscreenText(text=self.ATMPos, style = 1, fg=(1,1,1,1), pos = (1.3,-0.95), align=TextNode.A_right, scale = 0.08)
-        #taskMgr.add(self.ATMPositionMonitor, "playerPositionMonitor")
+        self.ATMPoisitionMonitorText = OnscreenText(text=self.ATMPos, style = 1, fg=(1,1,1,1), pos = (1.3,-0.95), align=TextNode.A_right, scale = 0.08)
+        taskMgr.add(self.ATMPositionMonitor, "playerPositionMonitor")
 
         #self.HUDTexts[1].setText("test")
 
@@ -654,6 +655,7 @@ class CharacterController(ShowBase):
         dlight = DirectionalLight('directionalLight')
         dlight.setDirection(Vec3(1, 1, -1))
         dlight.setColor(Vec4(0.7, 0.7, 0.7, 1))
+        #dlight.setColor(Vec4(1, 1, 1, 1)) Full light for stage 2
         dlightNP = render.attachNewNode(dlight)
 
         self.render.clearLight()
@@ -1103,8 +1105,8 @@ class CharacterController(ShowBase):
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        self.characterNP.setPos(12, 55, 4)
-        #self.characterNP.setPos(26.5, 316, 50)
+        #self.characterNP.setPos(12, 55, 4)
+        self.characterNP.setPos(26.5, 316, 50)
         #self.characterNP.setPos(40, 395, 24)
         #self.characterNP.setPos(160, 335, 22)
         #self.characterNP.setPos(97, 335, 24)
@@ -1408,6 +1410,13 @@ class CharacterController(ShowBase):
         else:
             return task.cont
 
+    def backgroundTask(self, centerLight, task):
+        if centerLight:
+            self.plnp.setPos(self.characterNP.getPos())
+        self.env.setPos(self.characterNP.getPos())
+        self.env.setZ(self.env.getZ() + 200)
+        return task.cont
+
     def setup(self):
 
         # World
@@ -1508,10 +1517,22 @@ class CharacterController(ShowBase):
         '''
 
         #background
-        #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/env.egg')
-        #self.env.setZ(-10000)
-        #self.env.reparentTo(render)
-        #self.env.setScale(70000)
+        self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/celestial.egg')
+        #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/PeachSky.egg')
+        #woah amazing
+        self.env.reparentTo(render)
+        #self.env.setH(90)
+        self.env.setP(90)
+        self.env.setScale(3)
+
+        #2nd background stuff
+        # self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/PeachSky.egg')
+        #self.plight = PointLight('plight')
+        #self.plnp = self.render.attachNewNode(self.plight)
+        #self.env.setLight(self.plnp)
+        #self.plnp.setPos(self.characterNP.getPos())
+        taskMgr.add(self.backgroundTask, "background", extraArgs=[False], appendTask=True)
+        #taskMgr.add(self.backgroundTask, "background", extraArgs=[True], appendTask=True)
 
 
 game = CharacterController()
