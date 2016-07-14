@@ -18,6 +18,8 @@ from panda3d.core import NodePath
 from panda3d.core import PandaNode
 from panda3d.core import TextNode
 
+from pandac.PandaModules import *
+
 from panda3d.bullet import BulletWorld
 from panda3d.bullet import BulletHelper
 from panda3d.bullet import BulletPlaneShape
@@ -50,7 +52,7 @@ class CharacterController(ShowBase):
         # Input
         self.accept('escape', self.doExit)
         #self.accept('r', self.doReset)
-        #self.accept('f3', self.toggleDebug)
+        self.accept('f3', self.toggleDebug)
         self.accept('space', self.doJump)
 
         inputState.watchWithModifiers('forward', 'w')
@@ -786,6 +788,25 @@ class CharacterController(ShowBase):
             boxModelNP.reparentTo(boxNP)
             boxModelNP.setPos(0, 0, - boxSize.z)
             boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+            ts = TextureStage.getDefault()
+            #texture = boxModelNP.getTexture(boxModelNP)
+            #texture = loader.loadTexture('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-stone2/brick.png')
+            #texture.setWrapU(Texture.WMRepeat)
+            #texture.setWrapV(Texture.WMRepeat)
+            boxModelNP.setTexOffset(ts, -0.5, -0.5)
+            length = boxSize.x
+            width = boxSize.y
+            if boxSize.z >= boxSize.x or boxSize.z >= boxSize:
+                length = boxSize.z
+                if boxSize.y >= boxSize.x:
+                    width = boxSize.y
+                elif boxSize.x >= boxSize.y:
+                    width = boxSize.x
+            boxModelNP.setTexScale(ts, length, width)
+            #boxModelNP.setTexScale(ts,boxSize.x, boxSize.z)
+            #tex = loader.loadTexture('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-stone2/map.jpg')
+            #boxModelNP.setTexture(texture, 1)
+            #boxModelNP.setTexGen(ts, TexGenAttrib.MWorldPosition)
             #random colorize everything, just for fun
             #boxModelNP.setColorScale(random.random(), random.random(), random.random(), 1)
         if color == "orange":
@@ -832,7 +853,7 @@ class CharacterController(ShowBase):
         shape = BulletBoxShape(boxSize)
         #boxNP = BulletGhostNode(name)
         boxNP = BulletRigidBodyNode(name)
-        boxNP.setMass(99999999999)
+        boxNP.setMass(0)
         boxNP.addShape(shape)
         boxNP.setGravity(Vec3(0,0,0))
         box = self.render.attachNewNode(boxNP)
@@ -1105,8 +1126,8 @@ class CharacterController(ShowBase):
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        #self.characterNP.setPos(12, 55, 4)
-        self.characterNP.setPos(26.5, 316, 50)
+        self.characterNP.setPos(12, 55, 4)
+        #self.characterNP.setPos(26.5, 316, 50)
         #self.characterNP.setPos(40, 395, 24)
         #self.characterNP.setPos(160, 335, 22)
         #self.characterNP.setPos(97, 335, 24)
@@ -1517,6 +1538,7 @@ class CharacterController(ShowBase):
         '''
 
         #background
+        #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/PeachSky.egg')
         self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/celestial.egg')
         #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/PeachSky.egg')
         #woah amazing
