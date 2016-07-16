@@ -17,6 +17,7 @@ from panda3d.core import BitMask32
 from panda3d.core import NodePath
 from panda3d.core import PandaNode
 from panda3d.core import TextNode
+from panda3d.core import Material
 
 from pandac.PandaModules import *
 
@@ -136,6 +137,10 @@ class CharacterController(ShowBase):
         #self.peteIsActive = False
         #self.peteIdentifer = 0
         #self.peteTaskAssigned = False
+        self.peteState = {
+            "isWalking" : False,
+            "isJumping" : False
+        }
         self.peteInteractions = {
             "firstTask-SFXUnknown" : False,
             "firstDialogue-Stage1" : False,
@@ -144,7 +149,14 @@ class CharacterController(ShowBase):
             "fourthDialogue-stage1" : False,
             "doorDestroyed" : False,
             "bookIt" : False,
-            "grandPillarSpawn" : False
+            "grandPillarSpawn" : False,
+            "transitionDialogue1" : False,
+            "transitionDoubleSwitchBegniWalk" : False,
+            "transitionDoubleSwitchDoorUnlocked" : False,
+            "transitionWalkingToEdge" : False,
+            "onInvisiblePlatform" : False,
+            "havePeteJumpInPlace" : False,
+            "finishedTransitionWalk" : False
         }
         self.peteInteractionsDialogueSwitches = {
             "switch1" : False,
@@ -152,6 +164,17 @@ class CharacterController(ShowBase):
             "switch3" : False,
             "switch4" : False,
             "switch5" : False
+        }
+
+        self.peteInvisibleGuideSwitches = {
+            "switch1": False,
+            "switch2": False,
+            "switch3": False,
+            "switch4": False,
+            "switch5": False,
+            "switch6": False,
+            "switch7": False,
+            "switch8": False
         }
         self.peteFirstTaskUnknownSFX = False
 
@@ -162,15 +185,18 @@ class CharacterController(ShowBase):
             "stage1-checkpoint-1" : False,
             "stage1-checkpoint-2" : False,
             "stage1-checkpoint-3" : False,
-            "stage1-checkpoint-4" : False
+            "stage1-checkpoint-4" : False,
+            "transition-checkpoint" : False,
+            "stage2-checkpoint-1" : False,
+            "stage2-checkpoint-2" : False
         }
 
         #On Screen Texts
         self.helpHudOn = False
         self.HUDTexts = []
         self.helpTexts = []
-        self.textMessage = OnscreenText(text="", style=1, fg=(1,1,1,1), pos=(0,-0.7), align = TextNode.ACenter, scale = 0.06)
-        self.textMessage2 = OnscreenText(text="", style=1, fg=(1, 1, 1, 1), pos=(0, -0.8), align=TextNode.ACenter, scale=0.06)
+        self.textMessage = OnscreenText(text="", style=1, fg=(1,1,1,1), bg=(0.7, 0.4, 0.1, 1), pos=(0,-0.7), align = TextNode.ACenter, scale = 0.06)
+        self.textMessage2 = OnscreenText(text="", style=1, fg=(1, 1, 1, 1), bg=(0.7, 0.4, 0.1, 1), pos=(0, -0.8), align=TextNode.ACenter, scale=0.06)
         self.textTimeAlert = OnscreenText(text="", style=1, fg=(1, 1, 1, 1), pos=(0.0, 0.80), align=TextNode.ACenter, scale=0.12)
         #textObject = OnscreenText(text='my text string', style = 1, fg=(1,1,0,1), pos=(-1.3, 0.95), align=TextNode.ALeft, scale=0.07)
         #textObject.destroy()
@@ -202,7 +228,10 @@ class CharacterController(ShowBase):
                 counter = counter + 1
                 box = Box(x,y,z,px,py,pz, blockName)
                 model = parameters[6]
-                self.createBox(box, model)
+                if model == "invisible":
+                    self.createInvisibleBox(box, collision = True)
+                else:
+                    self.createBox(box, model)
 
     def generateSlide(self, fileName):
         counter = 1
@@ -225,6 +254,22 @@ class CharacterController(ShowBase):
                 tilt = float(parameters[8])
                 self.createSlide(box, angle, tilt, model)
 
+    def generateBalls(self, fileName):
+        counter = 1
+        with open(fileName) as inputFile:
+            for line in inputFile:
+                parameters = []
+                for value in line.strip().split(','):
+                    parameters.append(value.strip())
+                radius = float(parameters[0])
+                x = float(parameters[1])
+                y = float(parameters[2])
+                z = float(parameters[3])
+                name = fileName.replace('.txt', "") + "-" + str(counter)
+                counter = counter + 1
+                mass = 10
+                self.addBall(radius, name, x, y, z, mass, respawn=True)
+
     def generateCoins(self, fileName):
         counter = 1
         with open(fileName) as inputFile:
@@ -240,6 +285,29 @@ class CharacterController(ShowBase):
                     type = parameters[3]
                 coinName = fileName.replace('.txt', "") + "-" + str(counter)
                 self.createCoin(Vec3(x,y,z),coinName, type = type)
+
+    def generateHazard(self, fileName):
+        counter = 1
+        with open(fileName) as inputFile:
+            for line in inputFile:
+                parameters = []
+                for value in line.strip().split(','):
+                    parameters.append(value.strip())
+                x = float(parameters[0])
+                y = float(parameters[1])
+                z = float(parameters[2])
+                px = float(parameters[3])
+                py = float(parameters[4])
+                pz = float(parameters[5])
+                blockName = fileName.replace('.txt', "") + "-" + str(counter)
+                counter = counter + 1
+                box = Box(x, y, z, px, py, pz, blockName)
+                time = float(parameters[6])
+                speed = float(parameters[7])
+                direction = str(parameters[8])
+                self.createHazardBox(box, 'lava', time, speed, direction)
+        # box = Box(2, 2, 2, 240, 335, 23, 'testingmoving')
+        # self.createHazardBox(box, 'lava', 4, 0.02, 'x')
 
     def appendToStage(self, x, y, z, px, py, pz, name):
         box = Box(x, y, z, px, py, pz, name)
@@ -262,6 +330,7 @@ class CharacterController(ShowBase):
         self.SFXticktock = self.loadSfx("Resources/Sound/Tick Tock.wav")
         self.SFXcheckpoint = self.loadSfx("Resources/Sound/checkpoint.wav")
         self.SFXfootstep = self.loadSfx("Resources/Sound/footstep.wav")
+        self.SFXburnt = self.loadSfx("Resources/Sound/burnt.mp3")
         self.SFXfootstep.setVolume(0.3)
         self.SFXjump.setVolume(0.05)
         self.SFXdashjump.setVolume(0.05)
@@ -274,6 +343,10 @@ class CharacterController(ShowBase):
         self.SFXbattery = self.loadSfx("Resources/Voice/battery.wav")
         self.SFXniceToMeetYou = self.loadSfx("Resources/Voice/nice to meet you.wav")
         self.SFXintroduction = self.loadSfx("Resources/Voice/introduction.wav")
+        self.SFXhello = self.loadSfx("Resources/Voice/hello.wav")
+        self.SFXaffirmative = self.loadSfx("Resources/Voice/affirmative.wav")
+        self.SFXbreathe = self.loadSfx("Resources/Voice/breathe.wav")
+        self.SFXsensors = self.loadSfx("Resources/Voice/sensors.wav")
         self.SFXfall1 = self.loadSfx("Resources/Voice/fall respawn1.wav")
         self.SFXfall2 = self.loadSfx("Resources/Voice/fall respawn2.wav")
         self.SFXfall3 = self.loadSfx("Resources/Voice/fall respawn3.wav")
@@ -428,6 +501,14 @@ class CharacterController(ShowBase):
             #self.isLanding = True
         self.character.doJump()
 
+    def doJumpPete(self):
+        self.pete.setMaxJumpHeight(8.0)
+        self.pete.setJumpSpeed(7.0)
+        if self.pete.isOnGround():
+            self.playSfx(self.SFXjump)
+            # self.isLanding = True
+        self.pete.doJump()
+
     def processInput(self, dt):
         speed = Vec3(0, 0, 0)
         omega = 0.0
@@ -534,6 +615,13 @@ class CharacterController(ShowBase):
         self.updateLife(-1)
         taskMgr.doMethodLater(3, self.checkPointRespawnTask, 'manual respawn')
         self.characterNP.setPos(self.respawnPoint)
+        if self.playerLives == 0:
+            self.textGameOver = OnscreenText(text="GAME OVER", style=1, fg=(1, 0, 0, 1), pos=(0, 0),
+                                             align=TextNode.ACenter, scale=0.5)
+            self.gameOver = True
+            taskMgr.remove("updateWorld")
+        if self.checkPointDict["stage2-checkpoint-1"] is False and self.peteInteractions["finishedTransitionWalk"]:
+            self.peteResetInvisibleGuide()
 
     def update(self, task):
         dt = globalClock.getDt()
@@ -689,7 +777,7 @@ class CharacterController(ShowBase):
             wallmNP.setPos(texturePos)
             wallmNP.setScale(wallSize.x * 2, wallSize.y * 2, wallSize.z * 2)
 
-    def addBall(self, radius, name, x, y, z, mass):
+    def addBall(self, radius, name, x, y, z, mass, respawn=False):
         shape = BulletSphereShape(radius)
         node = BulletRigidBodyNode(name)
         node.setMass(mass)
@@ -702,7 +790,16 @@ class CharacterController(ShowBase):
         smileyFace = self.loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/sphere/ball.egg')
         smileyFace.reparentTo(sphere)
         smileyFace.setScale(radius)
+        if respawn:
+            taskMgr.add(self.ballRespawnTask, 'ballRespawn', extraArgs=[sphere, sphere.getPos()], appendTask=True)
         return sphere
+
+    def ballRespawnTask(self, ball, startpos, task):
+        if ball.getZ() <= startpos.z - 30:
+            ball.node().setLinearVelocity(0)
+            ball.node().setAngularVelocity(0)
+            ball.setPos(startpos)
+        return task.cont
 
     def createCoin(self, pos, name, type=""):
         shape = BulletSphereShape(0.6)
@@ -717,7 +814,7 @@ class CharacterController(ShowBase):
         #smileyFace.setColorScale(1,1, 0, 1)
         if type == "battery":
             smileyFace.setColorScale(0,0,1,1)
-        taskMgr.add(self.coinSpinTask, "coinTask1", extraArgs=[coin, type, node], appendTask = True)
+        taskMgr.add(self.coinSpinTask, "coinTask", extraArgs=[coin, type, node], appendTask = True)
 
     def coinSpinTask(self, coin, type, node, task):
         spinConstant = 15
@@ -754,6 +851,11 @@ class CharacterController(ShowBase):
         boxModelNP.reparentTo(boxNP)
         boxModelNP.setPos(0, 0, - boxSize.z)
         boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+        ts = TextureStage.getDefault()
+        boxModelNP.setTexOffset(ts, -0.5, -0.5)
+        length = boxSize.x
+        width = boxSize.y
+        boxModelNP.setTexScale(ts, length, width)
 
     def createDisk(self, box):
         boxSize = box.getSize()
@@ -782,12 +884,26 @@ class CharacterController(ShowBase):
 
         #boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
         boxModelNP = self.loadModel(modelName)
+        #if modelName == "lava":
         if boxModelNP == "No model under that name":
             pass
         else:
             boxModelNP.reparentTo(boxNP)
             boxModelNP.setPos(0, 0, - boxSize.z)
             boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+            '''
+            ts = TextureStage.getDefault()
+            texture = self.loadTexture(modelName)
+            boxModelNP.setTexture(ts, texture)
+            wrapmode = Texture.WMRepeat
+
+            texture.setWrapU(wrapmode)
+            texture.setWrapV(wrapmode)
+            texture.setWrapW(wrapmode)
+            boxModelNP.setTexScale(ts, boxSize.x/2, boxSize.y/2, boxSize.z/2)
+            boxModelNP.reparentTo(boxNP)
+            '''
+
             ts = TextureStage.getDefault()
             #texture = boxModelNP.getTexture(boxModelNP)
             #texture = loader.loadTexture('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-stone2/brick.png')
@@ -796,17 +912,33 @@ class CharacterController(ShowBase):
             boxModelNP.setTexOffset(ts, -0.5, -0.5)
             length = boxSize.x
             width = boxSize.y
-            if boxSize.z >= boxSize.x or boxSize.z >= boxSize:
+            if boxSize.z >= 8:
                 length = boxSize.z
                 if boxSize.y >= boxSize.x:
                     width = boxSize.y
                 elif boxSize.x >= boxSize.y:
                     width = boxSize.x
-            boxModelNP.setTexScale(ts, length, width)
+            elif boxSize.z < 8:
+                width = boxSize.x
+                length = boxSize.y
+            elif boxSize.x == boxSize.z and boxSize.z == boxSize.y:
+                length = boxSize.y
+                width = boxSize.x
+            boxModelNP.setTexScale(ts, width, length)
+
+            '''
+            if modelName == "stone":
+                pass
+            elif modelName == 'stone2':
+                boxModelNP.setLight(self.directionalLightNP)
+                tex = loader.loadTexture("Resources/Models/ModelCollection/EnvBuildingBlocks/brick-stone2/map.jpg")
+                boxModelNP.setTexture(ts,tex)
+            '''
             #boxModelNP.setTexScale(ts,boxSize.x, boxSize.z)
             #tex = loader.loadTexture('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-stone2/map.jpg')
             #boxModelNP.setTexture(texture, 1)
             #boxModelNP.setTexGen(ts, TexGenAttrib.MWorldPosition)
+
             #random colorize everything, just for fun
             #boxModelNP.setColorScale(random.random(), random.random(), random.random(), 1)
         if color == "orange":
@@ -819,13 +951,156 @@ class CharacterController(ShowBase):
         # boxNP.node().removeAllChildren()
         # self.world.removeRigidBody(boxNP.node())
 
-    def createInvisibleBox(self, box):
+    def createHazardBox(self, box, modelName, time, speed, direction, moving = True, color = ""):
+        boxSize = box.getSize()
+        shape = BulletBoxShape(boxSize)
+        boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
+        boxNP.node().addShape(shape)
+        boxNP.node().setGravity(Vec3(0, 0, 0))
+        boxNP.setPos(box.getPosition())
+        boxNP.setCollideMask(BitMask32.allOff())
+        self.world.attachRigidBody(boxNP.node())
+
+        boxModelNP = self.loadModel(modelName)
+        if boxModelNP == "No model under that name":
+            pass
+        else:
+            boxModelNP.reparentTo(boxNP)
+            boxModelNP.setPos(0, 0, - boxSize.z)
+            boxModelNP.setScale(boxSize.x * 2, boxSize.y * 2, boxSize.z * 2)
+
+            ts = TextureStage.getDefault()
+            boxModelNP.setTexOffset(ts, -0.5, -0.5)
+            length = boxSize.x
+            width = boxSize.y
+            if boxSize.z >= 8:
+                length = boxSize.z
+                if boxSize.y >= boxSize.x:
+                    width = boxSize.y
+                elif boxSize.x >= boxSize.y:
+                    width = boxSize.x
+            elif boxSize.z < 8:
+                width = boxSize.x
+                length = boxSize.y
+            elif boxSize.x == boxSize.z and boxSize.z == boxSize.y:
+                length = boxSize.y
+                width = boxSize.x
+            boxModelNP.setTexScale(ts, width, length)
+
+        if color == "orange":
+            boxModelNP.setColorScale(0.8, 0.5, 0.5, 1)
+        elif color == "blue":
+            boxModelNP.setColorScale(0.3, 0.3, 1, 1)
+        elif color == "teal":
+            boxModelNP.setColorScale(0, 0.6, 0.7, 1)
+        boxNP.node().setLinearVelocity(Vec3(0, 1, 0))
+        if moving:
+            taskMgr.add(self.movingPlatformForwardTask, "movinghazard", extraArgs=[boxNP, time, speed, direction, Vec3(boxNP.getPos())], appendTask=True)
+        taskMgr.add(self.hazardCollisionTask, "hazardcollision", extraArgs=[boxNP], appendTask=True)
+        return boxNP
+
+    def movingPlatformForwardTask(self, boxNP, time, speed, direction, startPos, task):
+        if direction == 'x':
+            boxNP.setX(boxNP.getX() + speed)
+        elif direction == "y":
+            boxNP.setY(boxNP.getY() + speed)
+        elif direction == "z":
+            boxNP.setZ(boxNP.getZ() + speed)
+        if boxNP.getX() >= startPos.x + time or boxNP.getY() >= startPos.y + time or boxNP.getZ() >= startPos.z + time:
+            taskMgr.add(self.movingPlatformBackwardTask, "movinghazard", extraArgs=[boxNP, time, speed, direction, startPos],
+                        appendTask=True)
+            return task.done
+        return task.cont
+
+    def movingPlatformBackwardTask(self, boxNP, time, speed, direction, startPos, task):
+        if direction == 'x':
+            boxNP.setX(boxNP.getX() - speed)
+        elif direction == "y":
+            boxNP.setY(boxNP.getY() - speed)
+        elif direction == "z":
+            boxNP.setZ(boxNP.getZ() - speed)
+        if boxNP.getX() <= startPos.x - time or boxNP.getY() <= startPos.y - time or boxNP.getZ() <= startPos.z - time:
+            taskMgr.add(self.movingPlatformForwardTask, "movinghazard",
+                        extraArgs=[boxNP, time, speed, direction, startPos],
+                        appendTask=True)
+            return task.done
+        return task.cont
+
+    def movingPlatformForwardTaskOld(self, boxNP, time, speed, direction, task):
+        if task.time <= time:
+            if direction == 'x':
+                boxNP.setX(boxNP.getX() + speed)
+            elif direction =="y":
+                boxNP.setY(boxNP.getY() + speed)
+            elif direction =="z":
+                boxNP.setZ(boxNP.getZ() + speed)
+        else:
+            taskMgr.add(self.movingPlatformBackwardTask, "movinghazard", extraArgs=[boxNP, time, speed, direction],
+                        appendTask=True)
+            return task.done
+        return task.cont
+
+    def movingPlatformBackwardTaskOld(self, boxNP, time, speed, direction, task):
+        if task.time <= time:
+            if direction == 'x':
+                boxNP.setX(boxNP.getX() - speed)
+            elif direction == "y":
+                boxNP.setY(boxNP.getY() - speed)
+            elif direction == "z":
+                boxNP.setZ(boxNP.getZ() - speed)
+        else:
+            taskMgr.add(self.movingPlatformForwardTask, "movinghazard", extraArgs=[boxNP, time, speed, direction],
+                        appendTask=True)
+            return task.done
+        return task.cont
+
+    def hazardCollisionTask(self, boxNP, task):
+        collisions = self.world.contactTestPair(boxNP.node(), self.character)
+        collisions2 = self.world.contactTestPair(boxNP.node(), self.pete)
+        # if coinPos.getDistance(self.characterNP) <= 2:
+        if len(collisions.getContacts()) > 0 or len(collisions2.getContacts()) > 0:
+            self.respawnATM()
+            self.SFXburnt.play()
+        return task.cont
+
+    def loadTexture(self, modelName):
+        if modelName == 'brick':
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-cube/brick_#.png')
+        elif modelName == 'iron':
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-iron/brick_#.png')
+        elif modelName == 'sand':
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick_#.png')
+        elif modelName == 'stone':
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-stone/brick_#.png')
+        elif modelName == 'stone2':
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-stone2/brick_#.png')
+        elif modelName == 'stone3':
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/stone-cube/stone_#.png')
+        elif modelName == "techno":
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/techno/techno_#.png')
+        elif modelName == "lava":
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/lava/lava_#.jpg')
+        elif modelName == "volcano":
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/volcano/volcano_#.jpg')
+        elif modelName == "cave":
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/cave/cave_#.jpg')
+        elif modelName == "grassy":
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/grassy/cave_#.jpg')
+        elif modelName == "dry":
+            return loader.loadCubeMap('Resources/Models/ModelCollection/EnvBuildingBlocks/dry/cave_#.jpg')
+        else:
+            print modelName
+            return "No model under that name"
+
+    def createInvisibleBox(self, box, collision=False):
         boxSize = box.getSize()
         shape = BulletBoxShape(boxSize)
         boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
         boxNP.node().addShape(shape)
         boxNP.setPos(box.getPosition())
         boxNP.setCollideMask(BitMask32.allOff())
+        if collision:
+            boxNP.setCollideMask(BitMask32.allOn())
         self.world.attachRigidBody(boxNP.node())
 
         # boxModelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-sand/brick.egg')
@@ -844,31 +1119,23 @@ class CharacterController(ShowBase):
             return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-stone2/brick.egg')
         elif modelName == 'stone3':
             return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/stone-cube/stone.egg')
+        elif modelName =="techno":
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/techno/brick.egg')
+        elif modelName == "lava":
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/lava/brick.egg')
+        elif modelName == "volcano":
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/volcano/brick.egg')
+        elif modelName == "cave":
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/cave/brick.egg')
+        elif modelName == "grass":
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/grass/brick.egg')
+        elif modelName == "dry":
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/dry/brick.egg')
+        elif modelName == "grassy":
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/grassy/brick.egg')
         else:
             print modelName
             return "No model under that name"
-
-    def createMovingPlatform(self, x, y, z, pos, name):
-        boxSize = Vec3(x,y,z)
-        shape = BulletBoxShape(boxSize)
-        #boxNP = BulletGhostNode(name)
-        boxNP = BulletRigidBodyNode(name)
-        boxNP.setMass(0)
-        boxNP.addShape(shape)
-        boxNP.setGravity(Vec3(0,0,0))
-        box = self.render.attachNewNode(boxNP)
-        box.setPos(pos)
-        #box.setCollideMask(BitMask32.allOff())
-        self.world.attachRigidBody(boxNP)
-        #self.world.attachGhost(boxNP)
-        self.movingPlatformTest = boxNP
-        self.movingPlatformTestModel = box
-        #self.world.removeRigidBody(boxNP)
-
-    def movingPlatformTestTask(self, startPos, task):
-        #speed = Vec3(0, 0.1, 0.2)
-        self.movingPlatformTest.setLinearVelocity(Vec3(0, 1, 0))
-        return task.cont
 
     def createCheckPoint(self, pos, name):
         boxSize = Vec3(0.2, 0.2, 3)
@@ -892,9 +1159,9 @@ class CharacterController(ShowBase):
             self.checkPointDict[name] = True
             self.respawnPoint = boxNP.getPos()
             self.playSfx(self.SFXcheckpoint)
-            if self.checkPointDict["stage1-checkpoint-4"]:
-                self.textGameOver = OnscreenText(text="STAGE 1 COMPLETED!", style=1, fg=(1, 1, 0, 1), pos=(0, 0),
-                                                 align=TextNode.ACenter, scale=0.2)
+            #if self.checkPointDict["stage1-checkpoint-4"]:
+            #    self.textGameOver = OnscreenText(text="STAGE 1 COMPLETED!", style=1, fg=(1, 1, 0, 1), pos=(0, 0),
+            #                                     align=TextNode.ACenter, scale=0.2)
         if self.checkPointDict[name]:
             angleDegrees = task.time * 6.0
             checkPoint.setHpr(angleDegrees * 200, 0, 0)
@@ -1100,6 +1367,281 @@ class CharacterController(ShowBase):
             return task.done
         return task.cont
 
+    def invisiblePeteSpawnTask(self, target, task):
+        if self.characterNP.getDistance(target) <= 26:
+            self.peteNP.setPos(282, 327, 22)
+            return task.done
+        return task.cont
+
+    def setUpInvisiblePeteCheckPoint(self):
+        box = Box(1, 1, 1, 220, 335, 35, 'invisibleCheckTransition')
+        invisible = self.createInvisibleBox(box)
+        taskMgr.add(self.invisiblePeteSpawnTask, "invisibleClearUp", extraArgs=[invisible], appendTask=True)
+
+    def peteTransitionTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 10 and self.peteInteractions["transitionDoubleSwitchBegniWalk"] is False:
+            self.peteNP.lookAt(self.characterNP)
+            self.peteNP.setP(self.characterNP.getP())
+            #self.peteNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
+            if self.peteInteractions["transitionDialogue1"] is False:
+                self.peteInteractions["transitionDialogue1"] = True
+                self.clearPeteDialogueSwitches()
+                taskMgr.add(self.peteTransitionDialogue1, "PeteTransitionDialogue")
+        if self.peteInteractions["transitionDoubleSwitchBegniWalk"] and self.peteState["isWalking"] is False and self.peteInteractions["finishedTransitionWalk"] is False:
+            self.peteState["isWalking"] = True
+            self.peteInteractions["finishedTransitionWalk"] = True
+            self.peteNP.setH(0)
+            self.peteActorNP.setH(90)
+            #self.pete.setAngularMovement(omega)
+            #self.pete.setLinearMovement(Vec3(1.3,0,0), True)
+            self.pete.setLinearMovement(Vec3(1.6, 0, 0), True)
+        if self.peteNP.getX() >= 300 and self.peteState:
+            self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+            self.peteState["isWalking"] = False
+        if self.peteInteractions["transitionDoubleSwitchDoorUnlocked"]:
+            self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+            self.peteState["isWalking"] = False
+            taskMgr.doMethodLater(3, self.peteTransitionTask2, "peteTransitiontask2")
+            return task.done
+        return task.cont
+
+    def peteTransitionTask2(self, task):
+        if self.peteState["isWalking"] is False and self.peteInteractions["transitionWalkingToEdge"] is False:
+            self.peteInteractions["transitionWalkingToEdge"] = True
+            self.peteState["isWalking"] = True
+            self.pete.setLinearMovement(Vec3(2.3, 0, 0), True)
+            self.peteActorNP.setPlayRate(2.1, "walk")
+        if self.peteNP.getX() >= 329 and self.peteState["isWalking"]:
+            self.peteState["isWalking"] = False
+            self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+            self.peteActorNP.setPlayRate(1.3, "walk")
+            taskMgr.add(self.peteStage2Dialogue1, "peteStage2Dialogue1")
+            taskMgr.doMethodLater(3, self.peteStage2FirstTask, "peteStage2FirstTask")
+            return task.done
+        return task.cont
+
+    def peteTransitionDialogue1(self, task):
+        text = "Pete: "
+        if self.peteInteractionsDialogueSwitches["switch1"] is False:
+            self.peteInteractionsDialogueSwitches["switch1"] = True
+            self.SFXhello.play()
+            self.textMessageSpeak(text + "Hello! See those two switches?", line2="I tried stepping on them, but nothing happened.")
+        elif task.time > 10 and self.peteInteractionsDialogueSwitches["switch2"] is False:
+            self.peteInteractionsDialogueSwitches["switch2"] = True
+            self.textMessageSpeak(text + "Maybe we can try stepping on both at the same time.", line2="I'll get this one, ATM.")
+        elif task.time > 18 and self.peteInteractionsDialogueSwitches["switch3"] is False:
+            self.peteInteractionsDialogueSwitches["switch3"] = True
+            self.SFXaffirmative.play()
+            self.textMessageClear()
+            self.peteInteractions["transitionDoubleSwitchBegniWalk"] = True
+        if self.peteInteractions["transitionDoubleSwitchDoorUnlocked"]:
+            self.doJumpPete()
+            self.textMessageSpeak(text + "It worked! Breath in that fresh air ATM! ")
+            self.SFXbreathe.play()
+            taskMgr.doMethodLater(5, self.textMessageClearTask, "textMessageClear")
+            self.clearPeteDialogueSwitches()
+            return task.done
+        return task.cont
+
+    def peteStage2FirstTask(self, task):
+        if self.peteState["isWalking"] is False and self.peteInteractions["onInvisiblePlatform"] is False:
+            self.peteState["isWalking"] = True
+            self.peteInteractions["onInvisiblePlatform"] = True
+            self.pete.setLinearMovement(Vec3(1.3, 0, 0), True)
+            self.peteActorNP.setPlayRate(1.3, "walk")
+        if self.peteNP.getX() >= 334 and self.peteState["isWalking"]:
+            self.peteState["isWalking"] = False
+            self.pete.setLinearMovement(Vec3(0,0,0), True)
+            taskMgr.add(self.peteJumpInPlace, "peteJumpingInPlace")
+            return task.done
+        return task.cont
+
+    def peteStage2SecondTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 8:
+            if self.peteInvisibleGuideSwitches["switch1"] is False:
+                self.peteInvisibleGuideSwitches["switch1"] = True
+                self.peteNP.setH(0)
+                self.peteActorNP.setH(90)
+                self.pete.setLinearMovement(Vec3(1.3, 0, 0), True)
+                self.peteActorNP.setPlayRate(1.3, "walk")
+            if self.peteInvisibleGuideSwitches["switch2"] and self.peteInvisibleGuideSwitches["switch3"] is False:
+                self.peteInvisibleGuideSwitches["switch3"] = True
+                self.clearPeteInvisibleGuideSwitches()
+                taskMgr.doMethodLater(1, self.peteStage2ThirdTask, "invisibleG3")
+                return task.done
+        if self.peteInvisibleGuideSwitches["switch1"] and self.peteNP.getX() >= 342 and self.peteInvisibleGuideSwitches["switch4"] is False:
+            self.peteInvisibleGuideSwitches["switch4"] = True
+            self.peteNP.setH(90)
+            self.peteActorNP.setH(90)
+            self.pete.setLinearMovement(Vec3(0,0,0), True)
+            self.peteInvisibleGuideSwitches["switch2"] = True
+        return task.cont
+
+    def peteStage2ThirdTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 8:
+            if self.peteInvisibleGuideSwitches["switch1"] is False:
+                self.peteInvisibleGuideSwitches["switch1"] = True
+                self.pete.setLinearMovement(Vec3(2, 0, 0), True)
+                self.peteActorNP.setPlayRate(2, "walk")
+            if self.peteInvisibleGuideSwitches["switch3"]:
+                self.clearPeteInvisibleGuideSwitches()
+                taskMgr.doMethodLater(1, self.peteStage2FourthTask, "invisibleG4")
+                return task.done
+        if self.peteInvisibleGuideSwitches["switch1"] and self.peteNP.getY() >= 331 and self.peteInvisibleGuideSwitches["switch2"] is False:
+            self.peteInvisibleGuideSwitches["switch2"] = True
+            self.doJumpPete()
+        if self.peteNP.getY() >= 339 and self.peteInvisibleGuideSwitches["switch3"] is False:
+            self.peteInvisibleGuideSwitches["switch3"] = True
+            self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+            self.peteActorNP.setPlayRate(1.3, "walk")
+            self.peteNP.setH(0)
+            self.peteActorNP.setH(90)
+        return task.cont
+
+    def peteStage2FourthTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 8:
+            if self.peteInvisibleGuideSwitches["switch1"] is False:
+                self.peteInvisibleGuideSwitches["switch1"] = True
+                self.pete.setLinearMovement(Vec3(2, 0, 0), True)
+                self.peteActorNP.setPlayRate(2, "walk")
+            if self.peteInvisibleGuideSwitches["switch4"]:
+                self.clearPeteInvisibleGuideSwitches()
+                taskMgr.doMethodLater(1, self.peteStage2FifthTask, "invisibleG5")
+                return task.done
+        if self.peteInvisibleGuideSwitches["switch1"] and self.peteNP.getX() >= 346 and self.peteInvisibleGuideSwitches[
+            "switch2"] is False:
+            self.peteInvisibleGuideSwitches["switch2"] = True
+            self.doJumpPete()
+        if self.peteInvisibleGuideSwitches["switch2"] and self.peteNP.getX() >= 358 and self.peteInvisibleGuideSwitches[
+            "switch3"] is False:
+            self.peteInvisibleGuideSwitches["switch3"] = True
+            self.doJumpPete()
+        if self.peteNP.getX() >= 366 and self.peteInvisibleGuideSwitches["switch4"] is False:
+            self.peteInvisibleGuideSwitches["switch4"] = True
+            self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+            self.peteActorNP.setPlayRate(1.3, "walk")
+            self.peteNP.setH(90)
+            self.peteActorNP.setH(90)
+        return task.cont
+
+    def peteStage2FifthTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 8:
+            if self.peteInvisibleGuideSwitches["switch1"] is False:
+                self.peteInvisibleGuideSwitches["switch1"] = True
+                self.pete.setLinearMovement(Vec3(2, 0, 0), True)
+                self.peteActorNP.setPlayRate(2, "walk")
+            if self.peteInvisibleGuideSwitches["switch3"]:
+                self.clearPeteInvisibleGuideSwitches()
+                taskMgr.doMethodLater(1, self.peteStage2SixthTask, "invisibleG6")
+                return task.done
+        if self.peteInvisibleGuideSwitches["switch1"] and self.peteNP.getY() >= 343 and self.peteInvisibleGuideSwitches[
+            "switch2"] is False:
+            self.peteInvisibleGuideSwitches["switch2"] = True
+            self.doJumpPete()
+        if self.peteNP.getY() >= 375 and self.peteInvisibleGuideSwitches["switch3"] is False:
+            self.peteInvisibleGuideSwitches["switch3"] = True
+            self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+            self.peteActorNP.setPlayRate(1.3, "walk")
+            self.peteNP.setH(0)
+            self.peteActorNP.setH(90)
+        return task.cont
+
+    def peteStage2SixthTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 8:
+            if self.peteInvisibleGuideSwitches["switch1"] is False:
+                self.peteInvisibleGuideSwitches["switch1"] = True
+                self.pete.setLinearMovement(Vec3(2, 0, 0), True)
+                self.peteActorNP.setPlayRate(2, "walk")
+            if self.peteInvisibleGuideSwitches["switch5"] and self.checkPointDict["stage2-checkpoint-1"]:
+                self.clearPeteInvisibleGuideSwitches()
+                taskMgr.add(self.peteStage2Dialogue2, "peteStage2Dialogue2")
+                return task.done
+        if self.peteInvisibleGuideSwitches["switch1"] and self.peteNP.getX() >= 378 and self.peteInvisibleGuideSwitches[
+            "switch2"] is False:
+            self.peteInvisibleGuideSwitches["switch2"] = True
+            self.doJumpPete()
+        if self.peteInvisibleGuideSwitches["switch2"] and self.peteNP.getX() >= 390 and self.peteInvisibleGuideSwitches[
+            "switch3"] is False:
+            self.peteInvisibleGuideSwitches["switch3"] = True
+            self.doJumpPete()
+        if self.peteInvisibleGuideSwitches["switch3"] and self.peteNP.getX() >= 402 and self.peteInvisibleGuideSwitches[
+            "switch4"] is False:
+            self.peteInvisibleGuideSwitches["switch4"] = True
+            self.doJumpPete()
+        if self.peteNP.getX() >= 410 and self.peteInvisibleGuideSwitches["switch5"] is False:
+            self.peteInvisibleGuideSwitches["switch5"] = True
+            self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+            self.peteActorNP.setPlayRate(1.3, "walk")
+        return task.cont
+
+    def peteStage2Dialogue1(self, task):
+        text = "Pete: "
+        if self.peteInteractionsDialogueSwitches["switch1"] is False:
+            self.peteInteractionsDialogueSwitches["switch1"] = True
+            self.textMessageSpeak(text + "Hmmmmm... Something smells fishy here.")
+            taskMgr.doMethodLater(5, self.textMessageClearTask, "messageClearTask")
+            return task.done
+        return task.cont
+
+    def peteStage2Dialogue2(self, task):
+        self.peteNP.lookAt(self.characterNP)
+        self.peteActorNP.lookAt(self.characterNP)
+        self.peteActorNP.setH(self.peteActorNP.getH() + 180)
+        text = "Pete: "
+        if self.peteInteractionsDialogueSwitches["switch1"] is False:
+            self.peteInteractionsDialogueSwitches["switch1"] = True
+            self.textMessageSpeak(text + "We made it ATM! Take this battery, I'll catch up with you later.", line2="I'm still dizzy from jumping around in the air.")
+            self.updateLife(1)
+            taskMgr.doMethodLater(10, self.textMessageClearTask, "messageClearTask")
+            taskMgr.doMethodLater(7, self.ATMMessageSpeak, "ATMMessage", extraArgs=[self.SFXbattery], appendTask=True)
+            self.clearPeteDialogueSwitches()
+            return task.done
+        return task.cont
+
+    def peteJumpInPlace(self, task):
+        self.peteNP.lookAt(self.characterNP)
+        self.peteActorNP.lookAt(self.characterNP)
+        self.peteActorNP.setH(self.peteActorNP.getH() + 180)
+        #self.peteNP.setP(180)
+        if self.peteInteractionsDialogueSwitches["switch5"] is False:
+            self.peteInteractionsDialogueSwitches["switch5"] = True
+            self.textMessageSpeak("Pete: Look ATM! I am flying!")
+            taskMgr.add(self.peteJumpingInPlace, "peteJumpingInPlaceTask")
+            #taskMgr.doMethodLater(4, self.textMessageClearTask, "messageClearTask")
+        if task.time > 4.1 and self.peteInteractionsDialogueSwitches["switch4"] is False:
+            self.peteInteractionsDialogueSwitches["switch4"] = True
+            self.peteInteractions["havePeteJumpInPlace"] = True
+            self.textMessageSpeak("Pete: Can't you see these walkways?")
+            taskMgr.doMethodLater(4, self.textMessageClearTask, "messageClearTask")
+        if task.time > 8 and self.peteInteractionsDialogueSwitches["switch2"] is False:
+            self.peteInteractionsDialogueSwitches["switch2"] = True
+            self.SFXsensors.play()
+        if task.time > 13.5 and self.peteInteractionsDialogueSwitches["switch3"] is False:
+            self.peteInteractionsDialogueSwitches["switch3"] = True
+            self.textMessageSpeak("Pete: That's okay, I can guide you through.", line2="Stay close to me, ATM.")
+            taskMgr.doMethodLater(10, self.textMessageClearTask, "messageClearTask")
+            taskMgr.doMethodLater(4, self.ATMMessageSpeak, "ATM Message", extraArgs=[self.SFXacknowledged], appendTask=True)
+            self.clearPeteDialogueSwitches()
+            taskMgr.doMethodLater(5, self.peteStage2SecondTask, "invisibleG2")
+            return task.done
+        return task.cont
+
+    def peteJumpingInPlace(self, task):
+        self.doJumpPete()
+        if task.time > 4:
+            return task.done
+        return task.cont
+
+    def peteResetInvisibleGuide(self):
+        taskList = taskMgr.getAllTasks()
+        for task in taskList:
+            if "invisibleG" in task.name:
+                taskMgr.remove(task.name)
+        self.peteNP.setPos(334, 327, 22)
+        self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+        self.clearPeteInvisibleGuideSwitches()
+        taskMgr.add(self.peteStage2SecondTask, "invisibleG2")
+
     def textMessageSpeak(self, line1, line2=""):
         self.textMessage.setText(line1)
         self.textMessage2.setText(line2)
@@ -1115,9 +1657,17 @@ class CharacterController(ShowBase):
         self.textMessageClear()
         return task.done
 
+    def ATMMessageSpeak(self, voiceClip, task):
+        voiceClip.play()
+        return task.done
+
     def clearPeteDialogueSwitches(self):
         for k in self.peteInteractionsDialogueSwitches:
             self.peteInteractionsDialogueSwitches[k] = False
+
+    def clearPeteInvisibleGuideSwitches(self):
+        for switch in self.peteInvisibleGuideSwitches:
+            self.peteInvisibleGuideSwitches[switch] = False
 
     def createATM(self):
         h = 4.25
@@ -1126,11 +1676,13 @@ class CharacterController(ShowBase):
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        self.characterNP.setPos(12, 55, 4)
+        #self.characterNP.setPos(12, 55, 4)
         #self.characterNP.setPos(26.5, 316, 50)
         #self.characterNP.setPos(40, 395, 24)
-        #self.characterNP.setPos(160, 335, 22)
-        #self.characterNP.setPos(97, 335, 24)
+        #stage2 spawn point
+        #self.characterNP.setPos(200, 335, 24)
+        self.characterNP.setPos(576, 327, 24)
+        self.setUpStage2()
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
@@ -1158,11 +1710,112 @@ class CharacterController(ShowBase):
             selector = random.randint(1, len(self.SFXfallRespawnDict))
             self.playSfx(self.SFXfallRespawnDict[str(selector)])
         elif self.characterNP.getZ() <= -60 and self.respawning is False and self.playerLives == 1:
-            self.textGameOver = OnscreenText(text="GAME OVER", style=1, fg=(1, 0, 0, 1), pos=(0, 0),
-                                              align=TextNode.ACenter, scale=0.5)
-            self.gameOver = True
             self.respawnATM()
+        return task.cont
 
+    def setUpStage2(self):
+        self.generateStage("Stage/stage2.txt")
+        self.generateBalls("Stage/stage2balls.txt")
+        self.generateCoins("Stage/stage2coins.txt")
+        self.generateHazard("Stage/stage2lava.txt")
+        checkpointpos = Vec3(418, 375, 5)
+        self.createCheckPoint(checkpointpos, "stage2-checkpoint-1")
+        checkpointpos = Vec3(576, 319, 20)
+        self.createCheckPoint(checkpointpos, "stage2-checkpoint-2")
+
+    def setUpTransition(self):
+        self.generateStage("Stage/transition.txt")
+        self.setUpTransitionFirstObjective()
+        self.setUpInvisibleClearUpCheckPoint()
+        self.setUpInvisiblePeteCheckPoint()
+        if taskMgr.hasTaskNamed("firstPeteTask"):
+            taskMgr.remove("firstPeteTask")
+        taskMgr.add(self.peteTransitionTask, "peteTransitionTask")
+        self.setUpTransitionSecondObjective()
+        checkpointpos = Vec3(325, 335, 23)
+        self.createCheckPoint(checkpointpos, "transition-checkpoint")
+        #box = Box(2, 2, 2, 240, 335, 23, 'testingmoving')
+        #self.createHazardBox(box, 'lava', 4, 0.02, 'x')
+
+    def clearStage1Tasks(self):
+        taskList = taskMgr.getAllTasks()
+        for task in taskList:
+            if task.name == "coinTask":
+                taskMgr.remove(task.name)
+            if "stage1" in task.name:
+                taskMgr.remove(task.name)
+            if 'name' in task.name:
+                taskMgr.remove(task.name)
+            if task.name == "peteGrandPillarRespawn":
+                taskMgr.remove(task.name)
+        nodeList = self.render.getChildren()
+        for node in nodeList:
+            if "stage1" in node.getName():
+                node.node().removeAllChildren()
+                self.world.removeRigidBody(node.node())
+        #taskList = taskMgr.getAllTasks()
+        #for task in taskList:
+            #print task.name
+        self.setUpStage2()
+
+    def setUpTransitionFirstObjective(self):
+        name = "transition-objective1"
+        switchName = name + "switch"
+        box = Box(0.5, 20, 14.5, 250, 335, 35, name)
+        switch = self.createTimeSwitch(Vec3(230, 335, 20.5), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjective, name, extraArgs=[box, 'sand', switch, 5, switchName, name],
+                    appendTask=True)
+
+    def setUpTransitionSecondObjective(self):
+        box = Box(0.5, 20, 14.5, 330, 335, 35, "transition-unlockdoor1")
+        target = self.createBox(box, 'sand', color="teal")
+        name = "transition-objective1"
+        switchName = name + "switch"
+        switch2Name = name + "switch2"
+        switch = self.createTimeSwitch(Vec3(300, 327, 20.5), switchName)
+        switch2 = self.createTimeSwitch(Vec3(300, 343, 20.5), switch2Name)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.objectiveDestroyBoxTwoSwitches, name, extraArgs=[switch2, switch, target],
+                    appendTask=True)
+
+    def setUpInvisibleClearUpCheckPoint(self):
+        box = Box(1, 1, 1, 280, 335, 35, 'invisibleCheckTransition')
+        invisible = self.createInvisibleBox(box)
+        taskMgr.add(self.invisibleClearUpTask, "invisibleClearUp", extraArgs=[invisible], appendTask = True)
+
+    def invisibleClearUpTask(self, target, task):
+        if self.characterNP.getDistance(target) <= 26:
+            self.clearStage1Tasks()
+            taskMgr.add(self.musicFadeOut, 'musicFade')
+            #also set the new shit here
+            return task.done
+        return task.cont
+
+    def musicFadeOut(self, task):
+        if task.time > 2:
+            self.BGM1.stop()
+            return task.done
+        elif task.time > 1.8:
+            self.BGM1.setVolume(0.01)
+        elif task.time > 1.6:
+            self.BGM1.setVolume(0.02)
+        elif task.time > 1.4:
+            self.BGM1.setVolume(0.03)
+        elif task.time > 1.2:
+            self.BGM1.setVolume(0.04)
+        elif task.time > 1:
+            self.BGM1.setVolume(0.05)
+        elif task.time > 0.8:
+            self.BGM1.setVolume(0.06)
+        elif task.time > 0.6:
+            self.BGM1.setVolume(0.07)
+        elif task.time > 0.4:
+            self.BGM1.setVolume(0.08)
+        elif task.time > 0.2:
+            self.BGM1.setVolume(0.09)
         return task.cont
 
     def setUpStage1(self):
@@ -1301,6 +1954,29 @@ class CharacterController(ShowBase):
             return task.done
         return task.cont
 
+    def objectiveDestroyBoxTwoSwitches(self, switch1, switch2, target, task):
+        collisions = self.world.contactTestPair(switch1.node(), self.character)
+        collisions2 = self.world.contactTestPair(switch2.node(), self.pete)
+        if len(collisions.getContacts()) > 0 and len(collisions2.getContacts()) > 0:
+            self.playSfx(self.SFXclick)
+            target.node().removeAllChildren()
+            self.world.removeRigidBody(target.node())
+            self.peteInteractions["transitionDoubleSwitchDoorUnlocked"] = True
+            taskMgr.remove("background")
+            self.env.removeNode()
+            self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/PeachSky.egg')
+            self.env.reparentTo(render)
+            self.env.setScale(3)
+            self.plight = PointLight('plight')
+            self.plnp = self.render.attachNewNode(self.plight)
+            self.env.setLight(self.plnp)
+            self.plnp.setPos(self.characterNP.getPos())
+            self.playMusic(self.BGM2, looping=1, volume=0.1)
+            taskMgr.add(self.backgroundTask, "background", extraArgs=[True], appendTask=True)
+            return task.done
+        else:
+            return task.cont
+
     def timeObjectiveReverseGeneral(self, boxIn, name, switchVec, time):
         switchName = name + "switch"
         box = boxIn
@@ -1378,7 +2054,6 @@ class CharacterController(ShowBase):
             self.textTimeAlert.setFg((1, 1, 1, 1))
             self.timeObjectivesState[name] = False
             self.SFXticktock.stop()
-            self.textMessageClear()
             return task.done
         return task.cont
 
@@ -1453,54 +2128,14 @@ class CharacterController(ShowBase):
 
         #generate the stages
         self.setUpStage1()
+        self.setUpTransition()
         taskMgr.add(self.ATMRespawnTask, 'ATMrespawnTask')
         # Floor
         # shape = BulletPlaneShape(Vec3(0, 0, 1), 0)
-        floorPos = Vec3(0, 0, -2)
-        floorSize = Vec3(20, 20, 1)
-        shape = BulletBoxShape(floorSize)
-        floorNP = self.render.attachNewNode(BulletRigidBodyNode('Floor'))
-        floorNP.node().addShape(shape)
-        floorNP.setPos(floorPos)
-        floorNP.setCollideMask(BitMask32.allOn())
-        self.world.attachRigidBody(floorNP.node())
-        #textures brick, brown(disk), cylinder(cloud), ball(metal) nice floor looking texture, spinner
-        fmodelNP = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/brick-cube/brick.egg')
-        fmodelNP.reparentTo(floorNP)
-        fmodelNP.setPos(0, 0, 0)
-        fmodelNP.setScale(floorSize.x * 2, floorSize.y * 2, floorSize.z)
 
-        #Boxes
-        testBox = Box(5, 2, 3, -6, 15, 2, "hello")
-        testBox2 = Box(2, 2, 2, 10, 10, 2, "hello2")
-        self.createBox(testBox, 'brick')
-        self.createBox(testBox2, 'stone3')
-
-        #cylinder
-        #testCyn = Box(3, 0, 2, 60, 160, 40, "testCyn")
-        #self.createDisk(testCyn)
-
-        #slider
-        testSlide = Box(8, 3, 1, -6, -6, 8, "testSlide")
-        self.createSlide(testSlide, 5, -46, 'iron')
-
-        self.createFourWalls()
-        self.addBall(3, 'ball1', -5, 6, 10, 0.000000000000001)
-        self.addBall(1.5, 'ball2', 0, 0, 5, 10)
-        self.addBall(.4, 'ball3', 2, 5, 2, 0.001)
-
-        #coins
-        positionCoin = Vec3(3, -6, 3)
-        self.createCoin(positionCoin, "coin1")
-        positionCoin = Vec3(3, -9, 3)
-        self.createCoin(positionCoin, "coin2")
-        positionCoin = Vec3(3, -12, 3)
-        self.createCoin(positionCoin, "coin2")
-
-        #moving platform NOT WORKING ATM
-        positionMP = Vec3(4, -6, 5)
-        self.createMovingPlatform(3, 3, 1, positionMP, 'moving playform 1')
-        taskMgr.add(self.movingPlatformTestTask, 'testingMove', extraArgs=[positionMP], appendTask = True)
+        #positionMP = Vec3(4, -6, 5)
+        #self.createMovingPlatform(3, 3, 1, positionMP, 'moving playform 1')
+        #taskMgr.add(self.movingPlatformTestTask, 'testingMove', extraArgs=[positionMP], appendTask = True)
         # Stair
         origin = Point3(2, 0, 0)
         size = Vec3(2, 4.75, 1)
@@ -1539,22 +2174,12 @@ class CharacterController(ShowBase):
 
         #background
         #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/PeachSky.egg')
-        self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/celestial.egg')
-        #self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/PeachSky.egg')
-        #woah amazing
+        self.env = env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/celestial.egg')
         self.env.reparentTo(render)
-        #self.env.setH(90)
         self.env.setP(90)
         self.env.setScale(3)
 
-        #2nd background stuff
-        # self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/PeachSky.egg')
-        #self.plight = PointLight('plight')
-        #self.plnp = self.render.attachNewNode(self.plight)
-        #self.env.setLight(self.plnp)
-        #self.plnp.setPos(self.characterNP.getPos())
         taskMgr.add(self.backgroundTask, "background", extraArgs=[False], appendTask=True)
-        #taskMgr.add(self.backgroundTask, "background", extraArgs=[True], appendTask=True)
 
 
 game = CharacterController()
