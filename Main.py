@@ -92,8 +92,11 @@ class CharacterController(ShowBase):
             "objective2Set": False
         }
 
+        self.respawnZValue = -60
+
         #bugfixing switches
         self.stageOneCleared = False
+        self.startFromStageOne = True
 
         self.setup()
         #base.setBackgroundColor(0.1, 0.1, 0.8, 1)
@@ -1246,8 +1249,9 @@ class CharacterController(ShowBase):
 
         self.peteIdentifer = 1
         self.peteIsActive = True
-        taskMgr.add(self.peteFirstTask, 'firstPeteTask')
-        taskMgr.add(self.peteGrandPillarRespawn, "peteGrandPillarRespawn")
+        if self.startFromStageOne:
+            taskMgr.add(self.peteFirstTask, 'firstPeteTask')
+            taskMgr.add(self.peteGrandPillarRespawn, "peteGrandPillarRespawn")
 
     def peteFirstTask(self, task):
         if self.peteActorNP.getDistance(self.characterNP) <= 18:
@@ -1431,9 +1435,9 @@ class CharacterController(ShowBase):
 
     def peteTransitionTask(self, task):
         if self.peteActorNP.getDistance(self.characterNP) <= 10 and self.peteInteractions["transitionDoubleSwitchBegniWalk"] is False and self.stageOneCleared:
-            self.peteNP.lookAt(self.characterNP)
-            self.peteActorNP.lookAt(self.characterNP)
-            self.peteActorNP.setH(self.peteActorNP.getH() + 180)
+            #self.peteNP.lookAt(self.characterNP)
+            #self.peteActorNP.lookAt(self.characterNP)
+            #self.peteActorNP.setH(self.peteActorNP.getH() + 180)
             #self.peteNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
             if self.peteInteractions["transitionDialogue1"] is False:
                 self.peteInteractions["transitionDialogue1"] = True
@@ -1510,6 +1514,7 @@ class CharacterController(ShowBase):
 
     def peteStage2SecondTask(self, task):
         if self.peteActorNP.getDistance(self.characterNP) <= 8:
+            self.peteActorNP.setP(0)
             if self.peteInvisibleGuideSwitches["switch1"] is False:
                 self.peteInvisibleGuideSwitches["switch1"] = True
                 self.peteNP.setH(0)
@@ -1758,7 +1763,7 @@ class CharacterController(ShowBase):
         text = "Pete: "
         if self.peteInteractionsDialogueSwitches["switch1"] is False:
             self.peteInteractionsDialogueSwitches["switch1"] = True
-            self.textMessageSpeak(text + "Hey! I think that Did it! Don't worry about me, I can probably get back out.",
+            self.textMessageSpeak(text + "Hey! I think that did it! Don't worry about me, I can probably get back out.",
                                   line2="You go on ahead ATM, I think this tunnel will lead us to freedom!")
             taskMgr.doMethodLater(10, self.textMessageClearTask, "textMessageClear")
         if task.time >= 11 and self.peteInteractionsDialogueSwitches["switch2"] is False:
@@ -1797,6 +1802,8 @@ class CharacterController(ShowBase):
             #self.peteActorNP.setPlayRate(1.3, "walk")
             if taskMgr.hasTaskNamed("peteTransitionTask"):
                 taskMgr.remove("peteTransitionTask")
+            if taskMgr.hasTaskNamed("invisibleG6"):
+                taskMgr.remove("invisibleG6")
             self.clearPeteDialogueSwitches()
             taskMgr.add(self.peteStage2SeventhTask, "stage2SeventhPeteTask")
             #taskList = taskMgr.getAllTasks()
@@ -1839,15 +1846,22 @@ class CharacterController(ShowBase):
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        self.characterNP.setPos(12, 55, 4)
+        #self.characterNP.setPos(12, 55, 4)
         #self.characterNP.setPos(26.5, 316, 50)
         #self.characterNP.setPos(40, 395, 24)
         #stage2 spawn point
         #self.characterNP.setPos(200, 335, 24)
         #self.StageOneCleared switch need to be turned on
+        self.stageOneCleared = True
+        self.startFromStageOne = False
 
         #self.characterNP.setPos(624, 400, 30)
-        #self.setUpStage2()
+        self.setUpStage2()
+        #self.characterNP.setPos(664,416, 50)
+        self.setUpTransition2()
+        self.respawnZValue = -150
+        self.characterNP.setPos(640, 391, -0)
+
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
@@ -1870,11 +1884,11 @@ class CharacterController(ShowBase):
         self.actorNP.setPlayRate(0.7, 'land')
 
     def ATMRespawnTask(self, task):
-        if self.characterNP.getZ() <= -60 and self.respawning is False and self.playerLives > 1:
+        if self.characterNP.getZ() <= self.respawnZValue and self.respawning is False and self.playerLives > 1:
             self.respawnATM()
             selector = random.randint(1, len(self.SFXfallRespawnDict))
             self.playSfx(self.SFXfallRespawnDict[str(selector)])
-        elif self.characterNP.getZ() <= -60 and self.respawning is False and self.playerLives == 1:
+        elif self.characterNP.getZ() <= self.respawnZValue and self.respawning is False and self.playerLives == 1:
             self.respawnATM()
         return task.cont
 
@@ -1922,6 +1936,9 @@ class CharacterController(ShowBase):
             return task.done
         return task.cont
 
+    def setUpTransition2(self):
+        self.generateStage("Stage/transition2.txt")
+
     def setUpTransition(self):
         self.generateStage("Stage/transition.txt")
         self.setUpTransitionFirstObjective()
@@ -1956,6 +1973,26 @@ class CharacterController(ShowBase):
         #for task in taskList:
             #print task.name
         self.setUpStage2()
+
+    def clearStage2Tasks(self):
+        taskList = taskMgr.getAllTasks()
+        for task in taskList:
+            if task.name == "coinTask":
+                taskMgr.remove(task.name)
+            if task.name == "ballRespawn":
+                taskMgr.remove(task.name)
+            if "hazard" in task.name:
+                taskMgr.remove(task)
+            if "stage2" in task.name:
+                taskMgr.remove(task)
+        taskList = taskMgr.getAllTasks()
+        for task in taskList:
+            print task.name
+        nodeList = self.render.getChildren()
+        for node in nodeList:
+            if "stage2" in node.getName():
+                node.node().removeAllChildren()
+                self.world.removeRigidBody(node.node())
 
     def setUpTransitionFirstObjective(self):
         name = "transition-objective1"
@@ -2327,7 +2364,7 @@ class CharacterController(ShowBase):
         self.createPete()
 
         #generate the stages
-        self.setUpStage1()
+        #self.setUpStage1()
         self.setUpTransition()
         taskMgr.add(self.ATMRespawnTask, 'ATMrespawnTask')
         # Floor
