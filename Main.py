@@ -48,6 +48,7 @@ class CharacterController(ShowBase):
     def __init__(self):
 
         ShowBase.__init__(self)
+        #self.stage3Light = False
         self.loadSounds()
         self.setupLights()
         # Input
@@ -97,7 +98,6 @@ class CharacterController(ShowBase):
         #bugfixing switches
         self.stageOneCleared = False
         self.startFromStageOne = True
-
         self.setup()
         #base.setBackgroundColor(0.1, 0.1, 0.8, 1)
         base.setBackgroundColor(0.1, 0.1, 0.1, 1)
@@ -205,7 +205,11 @@ class CharacterController(ShowBase):
             "transition-checkpoint" : False,
             "stage2-checkpoint-1" : False,
             "stage2-checkpoint-2" : False,
-            "stage2-checkpoint-3": False
+            "stage2-checkpoint-3": False,
+            "stage3-checkpoint-1" : False,
+            "stage3-checkpoint-2": False,
+            "stage3-checkpoint-3": False,
+            "stage3-checkpoint-4": False
         }
 
         #On Screen Texts
@@ -322,9 +326,9 @@ class CharacterController(ShowBase):
                 time = float(parameters[6])
                 speed = float(parameters[7])
                 direction = str(parameters[8])
-                moving = True
+                moving = "yes"
                 if len(parameters) == 10:
-                    moving = False
+                    moving = str(parameters[9])
                 self.createHazardBox(box, 'lava', time, speed, direction, moving)
         # box = Box(2, 2, 2, 240, 335, 23, 'testingmoving')
         # self.createHazardBox(box, 'lava', 4, 0.02, 'x')
@@ -1004,7 +1008,7 @@ class CharacterController(ShowBase):
         # boxNP.node().removeAllChildren()
         # self.world.removeRigidBody(boxNP.node())
 
-    def createHazardBox(self, box, modelName, time, speed, direction, moving = True, color = ""):
+    def createHazardBox(self, box, modelName, time, speed, direction, moving="yes", color=""):
         boxSize = box.getSize()
         shape = BulletBoxShape(boxSize)
         boxNP = self.render.attachNewNode(BulletRigidBodyNode(box.getModel()))
@@ -1047,10 +1051,25 @@ class CharacterController(ShowBase):
         elif color == "teal":
             boxModelNP.setColorScale(0, 0.6, 0.7, 1)
         boxNP.node().setLinearVelocity(Vec3(0, 1, 0))
-        if moving:
+        if moving == "yes":
             taskMgr.add(self.movingPlatformForwardTask, "movinghazard", extraArgs=[boxNP, time, speed, direction, Vec3(boxNP.getPos())], appendTask=True)
+        elif moving == "static":
+            pass
+        elif moving =="down":
+            taskMgr.add(self.movingPlatformDownwardTask, "movinghazardDown", extraArgs=[boxNP, time, speed, direction, Vec3(boxNP.getPos())], appendTask=True)
         taskMgr.add(self.hazardCollisionTask, "hazardcollision", extraArgs=[boxNP], appendTask=True)
         return boxNP
+
+    def movingPlatformDownwardTask(self, boxNP, time, speed, direction, startPos, task):
+        if direction == 'x':
+            boxNP.setX(boxNP.getX() - speed)
+        elif direction == "y":
+            boxNP.setY(boxNP.getY() - speed)
+        elif direction == "z":
+            boxNP.setZ(boxNP.getZ() - speed)
+        if boxNP.getX() <= startPos.x - time or boxNP.getY() <= startPos.y - time or boxNP.getZ() <= startPos.z - time:
+            boxNP.setPos(startPos)
+        return task.cont
 
     def movingPlatformForwardTask(self, boxNP, time, speed, direction, startPos, task):
         if direction == 'x':
@@ -1059,6 +1078,12 @@ class CharacterController(ShowBase):
             boxNP.setY(boxNP.getY() + speed)
         elif direction == "z":
             boxNP.setZ(boxNP.getZ() + speed)
+            if time == 8 and speed == 0.05 and direction == 'z':
+                boxNP.setX(boxNP.getX() + 0.01)
+                boxNP.setY(boxNP.getY() + 0.01)
+                if boxNP.getX() >= startPos.x + 7.9:
+                    boxNP.setX(startPos.x)
+                    boxNP.setY(startPos.y)
         if boxNP.getX() >= startPos.x + time or boxNP.getY() >= startPos.y + time or boxNP.getZ() >= startPos.z + time:
             taskMgr.add(self.movingPlatformBackwardTask, "movinghazard", extraArgs=[boxNP, time, speed, direction, startPos],
                         appendTask=True)
@@ -1072,6 +1097,12 @@ class CharacterController(ShowBase):
             boxNP.setY(boxNP.getY() - speed)
         elif direction == "z":
             boxNP.setZ(boxNP.getZ() - speed)
+            if time == 8 and speed == 0.05 and direction == 'z':
+                boxNP.setX(boxNP.getX() + 0.01)
+                boxNP.setY(boxNP.getY() + 0.01)
+                if boxNP.getX() <= startPos.x - 7.9:
+                    boxNP.setX(startPos.x)
+                    boxNP.setY(startPos.y)
         if boxNP.getX() <= startPos.x - time or boxNP.getY() <= startPos.y - time or boxNP.getZ() <= startPos.z - time:
             taskMgr.add(self.movingPlatformForwardTask, "movinghazard",
                         extraArgs=[boxNP, time, speed, direction, startPos],
@@ -1855,12 +1886,15 @@ class CharacterController(ShowBase):
         self.stageOneCleared = True
         self.startFromStageOne = False
 
-        #self.characterNP.setPos(624, 400, 30)
-        self.setUpStage2()
+        #self.setUpStage2()
         #self.characterNP.setPos(664,416, 50)
         self.setUpTransition2()
+        #self.characterNP.setPos(640, 391, -0)
+        #self.characterNP.setPos(640, 364, -30)
         self.respawnZValue = -150
-        self.characterNP.setPos(640, 391, -0)
+        #self.characterNP.setPos(620, 598, -120)
+        self.characterNP.setPos(656, 782, -108)
+        self.clearStage2Tasks()
 
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
@@ -1891,6 +1925,55 @@ class CharacterController(ShowBase):
         elif self.characterNP.getZ() <= self.respawnZValue and self.respawning is False and self.playerLives == 1:
             self.respawnATM()
         return task.cont
+
+    def setUpStage3(self):
+        self.generateStage("Stage/stage3.txt")
+        self.generateHazard("Stage/stage3lava.txt")
+        self.generateCoins("Stage/stage3coins.txt")
+        checkpointpos = Vec3(640, 391, -97)
+        self.createCheckPoint(checkpointpos, "stage3-checkpoint-1")
+        checkpointpos = Vec3(620, 476, -97)
+        self.createCheckPoint(checkpointpos, "stage3-checkpoint-2")
+        checkpointpos = Vec3(620, 598, -126)
+        self.createCheckPoint(checkpointpos, "stage3-checkpoint-3")
+        #checkpointpos = Vec3(620, 598, -126)
+        #self.createCheckPoint(checkpointpos, "stage3-checkpoint-4")
+        self.setUpStage3FirstObjective()
+        self.setUpStage3SecondObjective()
+        self.setUpStage3ThirdObjective()
+
+    def setUpStage3FirstObjective(self):
+        name = "stage3-objective1-timed1"
+        switchName = name + "switch"
+        #2, 8, 0.2, 643, 500, -140, sand
+        box = Box(2, 8, 0.2, 643, 500, -140, name)
+        switch = self.createTimeSwitch(Vec3(640, 480, -130), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, 6, switchName, name],
+                    appendTask=True)
+
+    def setUpStage3SecondObjective(self):
+        name = "stage3-objective2-timed2"
+        switchName = name + "switch"
+        # 1, 1, 0.5, 644, 598, -132, sand
+        box = Box(1, 1, 0.5, 644, 598, -132, name)
+        switch = self.createTimeSwitch(Vec3(622, 598, -129), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, 6, switchName, name],
+                    appendTask=True)
+
+    def setUpStage3ThirdObjective(self):
+        name = "stage3-objective3-timed3"
+        switchName = name + "switch"
+        # 1, 1, 0.5, 644, 598, -132, sand
+        box = Box(1, 1, 0.5, 656, 606, -132, name)
+        switch = self.createTimeSwitch(Vec3(656, 600, -135), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, 6, switchName, name],
+                    appendTask=True)
 
     def setUpStage2(self):
         self.generateStage("Stage/stage2.txt")
@@ -1938,11 +2021,14 @@ class CharacterController(ShowBase):
 
     def setUpTransition2(self):
         self.generateStage("Stage/transition2.txt")
+        box = Box(1, 1, 1, 640, 391, -10, 'invisibleCheckTransition2')
+        self.setUpInvisibleClearUpCheckPoint(box, stage="stage2")
 
     def setUpTransition(self):
         self.generateStage("Stage/transition.txt")
         self.setUpTransitionFirstObjective()
-        self.setUpInvisibleClearUpCheckPoint()
+        box = Box(1, 1, 1, 280, 335, 35, 'invisibleCheckTransition')
+        self.setUpInvisibleClearUpCheckPoint(box)
         self.setUpInvisiblePeteCheckPoint()
         #if taskMgr.hasTaskNamed("firstPeteTask"):
         #    taskMgr.remove("firstPeteTask")
@@ -1985,14 +2071,27 @@ class CharacterController(ShowBase):
                 taskMgr.remove(task)
             if "stage2" in task.name:
                 taskMgr.remove(task)
-        taskList = taskMgr.getAllTasks()
-        for task in taskList:
-            print task.name
+            if "transition-objective1" in task.name:
+                taskMgr.remove(task)
         nodeList = self.render.getChildren()
         for node in nodeList:
-            if "stage2" in node.getName():
+            if "stage2" in node.getName() or "transition-objective1" in node.getName():
                 node.node().removeAllChildren()
                 self.world.removeRigidBody(node.node())
+            if "transition" in node.getName():
+                if "transition2" in node.getName():
+                    pass
+                else:
+                    node.node().removeAllChildren()
+                    self.world.removeRigidBody(node.node())
+        #taskList = taskMgr.getAllTasks()
+        #for task in taskList:
+        #    print task.name
+        self.setUpStage3()
+        myFog = Fog("Fog Name")
+        myFog.setColor(0.5, 0.5, 0.5)
+        myFog.setExpDensity(0.02)
+        render.setFog(myFog)
 
     def setUpTransitionFirstObjective(self):
         name = "transition-objective1"
@@ -2017,14 +2116,20 @@ class CharacterController(ShowBase):
         taskMgr.add(self.objectiveDestroyBoxTwoSwitches, name, extraArgs=[switch2, switch, target],
                     appendTask=True)
 
-    def setUpInvisibleClearUpCheckPoint(self):
-        box = Box(1, 1, 1, 280, 335, 35, 'invisibleCheckTransition')
+    def setUpInvisibleClearUpCheckPoint(self, box, stage="stage1"):
+        #box = Box(1, 1, 1, 280, 335, 35, 'invisibleCheckTransition')
         invisible = self.createInvisibleBox(box)
-        taskMgr.add(self.invisibleClearUpTask, "invisibleClearUp", extraArgs=[invisible], appendTask = True)
+        taskMgr.add(self.invisibleClearUpTask, "invisibleClearUp", extraArgs=[invisible, stage], appendTask = True)
 
-    def invisibleClearUpTask(self, target, task):
+    def invisibleClearUpTask(self, target, stage, task):
         if self.characterNP.getDistance(target) <= 26:
-            self.clearStage1Tasks()
+            if stage == "stage1":
+                self.clearStage1Tasks()
+                #taskMgr.add(self.musicFadeOut, 'musicFade')
+            if stage == "stage2":
+                self.respawnZValue = -150
+                self.respawnPoint = Vec3(640, 391, -0)
+                self.clearStage2Tasks()
             taskMgr.add(self.musicFadeOut, 'musicFade')
             #also set the new shit here
             return task.done
