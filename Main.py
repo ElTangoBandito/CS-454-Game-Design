@@ -92,6 +92,9 @@ class CharacterController(ShowBase):
             "objective2Set": False
         }
 
+        #bugfixing switches
+        self.stageOneCleared = False
+
         self.setup()
         #base.setBackgroundColor(0.1, 0.1, 0.8, 1)
         base.setBackgroundColor(0.1, 0.1, 0.1, 1)
@@ -150,13 +153,16 @@ class CharacterController(ShowBase):
             "doorDestroyed" : False,
             "bookIt" : False,
             "grandPillarSpawn" : False,
+            "stage1Cleared" : False,
             "transitionDialogue1" : False,
             "transitionDoubleSwitchBegniWalk" : False,
             "transitionDoubleSwitchDoorUnlocked" : False,
             "transitionWalkingToEdge" : False,
             "onInvisiblePlatform" : False,
             "havePeteJumpInPlace" : False,
-            "finishedTransitionWalk" : False
+            "finishedTransitionWalk" : False,
+            "stage2-third-dialogue" : False,
+            "stage2-commanding-section-complete" : False
         }
         self.peteInteractionsDialogueSwitches = {
             "switch1" : False,
@@ -176,7 +182,14 @@ class CharacterController(ShowBase):
             "switch7": False,
             "switch8": False
         }
+        self.peteCommandsSwitches = {
+            "commandsEnabled" : False,
+            "go" : False,
+            "stop" : False,
+            "going" : False
+        }
         self.peteFirstTaskUnknownSFX = False
+        self.peteRespawnPos = Vec3(0,0,0)
 
         #checkpoint
         self.respawnPoint = Vec3(self.characterNP.getX(), self.characterNP.getY(), self.characterNP.getZ())
@@ -188,7 +201,8 @@ class CharacterController(ShowBase):
             "stage1-checkpoint-4" : False,
             "transition-checkpoint" : False,
             "stage2-checkpoint-1" : False,
-            "stage2-checkpoint-2" : False
+            "stage2-checkpoint-2" : False,
+            "stage2-checkpoint-3": False
         }
 
         #On Screen Texts
@@ -305,7 +319,10 @@ class CharacterController(ShowBase):
                 time = float(parameters[6])
                 speed = float(parameters[7])
                 direction = str(parameters[8])
-                self.createHazardBox(box, 'lava', time, speed, direction)
+                moving = True
+                if len(parameters) == 10:
+                    moving = False
+                self.createHazardBox(box, 'lava', time, speed, direction, moving)
         # box = Box(2, 2, 2, 240, 335, 23, 'testingmoving')
         # self.createHazardBox(box, 'lava', 4, 0.02, 'x')
 
@@ -347,6 +364,7 @@ class CharacterController(ShowBase):
         self.SFXaffirmative = self.loadSfx("Resources/Voice/affirmative.wav")
         self.SFXbreathe = self.loadSfx("Resources/Voice/breathe.wav")
         self.SFXsensors = self.loadSfx("Resources/Voice/sensors.wav")
+        self.SFXspeedOfLight = self.loadSfx("Resources/Voice/speedoflight.wav")
         self.SFXfall1 = self.loadSfx("Resources/Voice/fall respawn1.wav")
         self.SFXfall2 = self.loadSfx("Resources/Voice/fall respawn2.wav")
         self.SFXfall3 = self.loadSfx("Resources/Voice/fall respawn3.wav")
@@ -360,6 +378,26 @@ class CharacterController(ShowBase):
             "4" : self.SFXfall4,
             "5" : self.SFXfall5,
             "6" : self.SFXfall6
+        }
+        self.SFXgo1 = self.loadSfx("Resources/Voice/go1.wav")
+        self.SFXgo2 = self.loadSfx("Resources/Voice/go2.wav")
+        self.SFXgo3 = self.loadSfx("Resources/Voice/go3.wav")
+        self.SFXgo4 = self.loadSfx("Resources/Voice/go4.wav")
+        self.SFXgoDict = {
+            "1": self.SFXgo1,
+            "2": self.SFXgo2,
+            "3": self.SFXgo3,
+            "4": self.SFXgo4
+        }
+        self.SFXstop1 = self.loadSfx("Resources/Voice/stop1.wav")
+        self.SFXstop2 = self.loadSfx("Resources/Voice/stop2.wav")
+        self.SFXstop3 = self.loadSfx("Resources/Voice/stop3.wav")
+        self.SFXstop4 = self.loadSfx("Resources/Voice/stop4.wav")
+        self.SFXstopDict = {
+            "1": self.SFXstop1,
+            "2": self.SFXstop2,
+            "3": self.SFXstop3,
+            "4": self.SFXstop4
         }
 
     def ATMPositionMonitor(self, task):
@@ -411,6 +449,15 @@ class CharacterController(ShowBase):
                          scale=0.06))
         self.helpTexts.append(
             OnscreenText(text="[F2] : Toggle Help - Off", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.15),
+                         align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[G] : Command Pete - move (Available during stage 2)", style=1, fg=(1, 1, 1, 1), pos=(-1.3, 0.05),
+                         align=TextNode.ALeft,
+                         scale=0.06))
+        self.helpTexts.append(
+            OnscreenText(text="[H] : Command Pete - hold (Available during stage 2)", style=1, fg=(1, 1, 1, 1),
+                         pos=(-1.3, 0.00),
                          align=TextNode.ALeft,
                          scale=0.06))
         self.helpTexts.append(
@@ -622,6 +669,9 @@ class CharacterController(ShowBase):
             taskMgr.remove("updateWorld")
         if self.checkPointDict["stage2-checkpoint-1"] is False and self.peteInteractions["finishedTransitionWalk"]:
             self.peteResetInvisibleGuide()
+        if self.peteCommandsSwitches["commandsEnabled"]:
+            self.peteNP.setPos(self.peteRespawnPos)
+            self.pete.setLinearMovement(Vec3(0, 0, 0), True)
 
     def update(self, task):
         dt = globalClock.getDt()
@@ -1370,6 +1420,7 @@ class CharacterController(ShowBase):
     def invisiblePeteSpawnTask(self, target, task):
         if self.characterNP.getDistance(target) <= 26:
             self.peteNP.setPos(282, 327, 22)
+            self.stageOneCleared = True
             return task.done
         return task.cont
 
@@ -1379,9 +1430,10 @@ class CharacterController(ShowBase):
         taskMgr.add(self.invisiblePeteSpawnTask, "invisibleClearUp", extraArgs=[invisible], appendTask=True)
 
     def peteTransitionTask(self, task):
-        if self.peteActorNP.getDistance(self.characterNP) <= 10 and self.peteInteractions["transitionDoubleSwitchBegniWalk"] is False:
+        if self.peteActorNP.getDistance(self.characterNP) <= 10 and self.peteInteractions["transitionDoubleSwitchBegniWalk"] is False and self.stageOneCleared:
             self.peteNP.lookAt(self.characterNP)
-            self.peteNP.setP(self.characterNP.getP())
+            self.peteActorNP.lookAt(self.characterNP)
+            self.peteActorNP.setH(self.peteActorNP.getH() + 180)
             #self.peteNP.setHpr(self.peteActorNP.getH() + 180, 0, 0)
             if self.peteInteractions["transitionDialogue1"] is False:
                 self.peteInteractions["transitionDialogue1"] = True
@@ -1642,6 +1694,117 @@ class CharacterController(ShowBase):
         self.clearPeteInvisibleGuideSwitches()
         taskMgr.add(self.peteStage2SecondTask, "invisibleG2")
 
+    def peteStage2SeventhTask(self, task):
+        if self.peteActorNP.getDistance(self.characterNP) <= 12:
+            self.peteNP.lookAt(self.characterNP)
+            self.peteActorNP.lookAt(self.characterNP)
+            self.peteActorNP.setH(self.peteActorNP.getH() + 180)
+            if self.peteInteractions["stage2-third-dialogue"] is False:
+                self.peteInteractions["stage2-third-dialogue"] = True
+                taskMgr.add(self.peteStage2Dialogue3, "peteStage2Dialogue3")
+        if self.peteCommandsSwitches["commandsEnabled"]:
+            self.peteNP.setH(0)
+            self.peteActorNP.setH(90)
+            taskMgr.add(self.peteStage2CommandingTask, "peteCommandingTask")
+            return task.done
+        return task.cont
+
+    def peteStage2CommandingTask(self, task):
+        if self.peteInteractions["stage2-commanding-section-complete"]:
+            taskMgr.add(self.peteStage2Dialogue4, "pete-stage2-Dialogue4")
+            return task.done
+        if self.peteCommandsSwitches["go"] and self.peteCommandsSwitches["going"] is False:
+            self.peteCommandsSwitches["going"] = True
+            self.peteCommandsSwitches["stop"] = False
+            self.pete.setLinearMovement(Vec3(2, 0, 0), True)
+            self.peteActorNP.setPlayRate(1.8, "walk")
+        if self.peteCommandsSwitches["stop"] and self.peteCommandsSwitches["going"]:
+            self.peteCommandsSwitches["going"] = False
+            self.peteCommandsSwitches["go"] = False
+            self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+        if self.peteNP.getX() >= 664:
+            self.peteCommandsSwitches["commandsEnabled"] = False
+            self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+            self.peteInteractions["stage2-commanding-section-complete"] = True
+        return task.cont
+
+    def peteStage2Dialogue3(self, task):
+        text="Pete: "
+        if self.peteInteractionsDialogueSwitches["switch1"] is False:
+            self.peteInteractionsDialogueSwitches["switch1"] = True
+            self.textMessageSpeak(text + "ATM! I found an entrance to an underground volcano!",
+                                  line2="I see the a switch down this tunnel, but I'm too scared to go over there.")
+            taskMgr.doMethodLater(10, self.textMessageClearTask, "textMessageClear")
+        if task.time >= 11 and self.peteInteractionsDialogueSwitches["switch2"] is False:
+            self.peteInteractionsDialogueSwitches["switch2"] = True
+            self.textMessageSpeak(text + "Hey ATM, you have a brain of a robot, think you can guide me over there?")
+            taskMgr.doMethodLater(5, self.ATMMessageSpeak, "ATMmessageSpeak", extraArgs=[self.SFXspeedOfLight], appendTask=True)
+            taskMgr.doMethodLater(5, self.textMessageClearTask, "textMessageClear")
+        if task.time >= 26 and self.peteInteractionsDialogueSwitches["switch3"] is False:
+            self.peteInteractionsDialogueSwitches["switch3"] = True
+            self.textMessageSpeak(text + "Okay ATM, I'll follow your command. Press [G] to command me to move.", line2="Press [H] to command me to stop.")
+            taskMgr.doMethodLater(10, self.textMessageClearTask, "textMessageClearTask")
+            self.peteCommandsSwitches["commandsEnabled"] = True
+            self.accept('g', self.commandGo)
+            self.accept('h', self.commandHold)
+            self.clearPeteDialogueSwitches()
+            return task.done
+        return task.cont
+
+    def peteStage2Dialogue4(self, task):
+        self.peteNP.lookAt(self.characterNP)
+        self.peteActorNP.lookAt(self.characterNP)
+        self.peteActorNP.setH(self.peteActorNP.getH() + 180)
+        text = "Pete: "
+        if self.peteInteractionsDialogueSwitches["switch1"] is False:
+            self.peteInteractionsDialogueSwitches["switch1"] = True
+            self.textMessageSpeak(text + "Hey! I think that Did it! Don't worry about me, I can probably get back out.",
+                                  line2="You go on ahead ATM, I think this tunnel will lead us to freedom!")
+            taskMgr.doMethodLater(10, self.textMessageClearTask, "textMessageClear")
+        if task.time >= 11 and self.peteInteractionsDialogueSwitches["switch2"] is False:
+            self.peteInteractionsDialogueSwitches["switch2"] = True
+            self.clearPeteDialogueSwitches()
+            return task.done
+        return task.cont
+
+    def commandGo(self):
+        if self.peteCommandsSwitches['go'] is False and self.peteCommandsSwitches["commandsEnabled"]:
+            self.peteCommandsSwitches["go"] = True
+            selector = random.randint(1, len(self.SFXgoDict))
+            self.playSfx(self.SFXgoDict[str(selector)])
+
+    def commandHold(self):
+        if self.peteCommandsSwitches["stop"] is False and self.peteCommandsSwitches["commandsEnabled"]:
+            self.peteCommandsSwitches["stop"] = True
+            selector = random.randint(1, len(self.SFXstopDict))
+            self.playSfx(self.SFXstopDict[str(selector)])
+
+    def resetPeteCommands(self):
+        self.peteCommandsSwitches['go'] = False
+        self.peteCommandsSwitches['stop'] = True
+        self.peteCommandsSwitches['going'] = False
+
+    def setUpStage2PeteInvisibleCheckPoint(self):
+        box = Box(1, 1, 1, 576, 381, 20, 'invisibleCheckStage2')
+        invisible = self.createInvisibleBox(box)
+        taskMgr.add(self.stage2InvisiblePeteSpawnTask, "invisiblePeteRespawn", extraArgs=[invisible], appendTask=True)
+
+    def stage2InvisiblePeteSpawnTask(self, target, task):
+        if self.characterNP.getDistance(target) <= 26:
+            self.peteNP.setPos(608, 391, 26)
+            self.peteRespawnPos = Vec3(608, 391, 26)
+            #self.pete.setLinearMovement(Vec3(1.3, 0, 0), True)
+            #self.peteActorNP.setPlayRate(1.3, "walk")
+            if taskMgr.hasTaskNamed("peteTransitionTask"):
+                taskMgr.remove("peteTransitionTask")
+            self.clearPeteDialogueSwitches()
+            taskMgr.add(self.peteStage2SeventhTask, "stage2SeventhPeteTask")
+            #taskList = taskMgr.getAllTasks()
+            #for task in taskList:
+            #   print task.name
+            return task.done
+        return task.cont
+
     def textMessageSpeak(self, line1, line2=""):
         self.textMessage.setText(line1)
         self.textMessage2.setText(line2)
@@ -1676,13 +1839,15 @@ class CharacterController(ShowBase):
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        #self.characterNP.setPos(12, 55, 4)
+        self.characterNP.setPos(12, 55, 4)
         #self.characterNP.setPos(26.5, 316, 50)
         #self.characterNP.setPos(40, 395, 24)
         #stage2 spawn point
         #self.characterNP.setPos(200, 335, 24)
-        self.characterNP.setPos(576, 327, 24)
-        self.setUpStage2()
+        #self.StageOneCleared switch need to be turned on
+
+        #self.characterNP.setPos(624, 400, 30)
+        #self.setUpStage2()
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
         self.world.attachCharacter(self.character)
@@ -1722,14 +1887,48 @@ class CharacterController(ShowBase):
         self.createCheckPoint(checkpointpos, "stage2-checkpoint-1")
         checkpointpos = Vec3(576, 319, 20)
         self.createCheckPoint(checkpointpos, "stage2-checkpoint-2")
+        checkpointpos = Vec3(608, 399, 28)
+        self.createCheckPoint(checkpointpos, "stage2-checkpoint-3")
+        self.setUpStage2PeteInvisibleCheckPoint()
+        self.setUpStage2FirstObjective()
+        self.setUpStage2SecondObjective()
+
+    def setUpStage2FirstObjective(self):
+        #4, 4, 4, 640, 391, 18, sand
+        name = "stage2-objective1-destroy"
+        switchName = name + "switch"
+        box = Box(4, 4, 4, 640, 391, 18, name)
+        boxNP = self.createBox(box, 'sand', color='orange')
+        switch = self.createTimeSwitch(Vec3(664, 391, 19), switchName)
+        taskMgr.add(self.destroyBoxTask, name, extraArgs=[boxNP, switch], appendTask=True)
+
+    def setUpStage2SecondObjective(self):
+        #4, 4, 4, 656, 391, 16, sand
+        name = "stage2-objective2-timed1"
+        switchName = name + "switch"
+        box = Box(4, 4, 4, 656, 391, 16, name)
+        switch = self.createTimeSwitch(Vec3(668, 419, 48), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, 6, switchName, name],
+                    appendTask=True)
+
+    def destroyBoxTask(self, boxNP, switch, task):
+        collision = self.world.contactTestPair(switch.node(), self.pete)
+        if len(collision.getContacts()) > 0:
+            boxNP.node().removeAllChildren()
+            self.world.removeRigidBody(boxNP.node())
+            self.SFXclick.play()
+            return task.done
+        return task.cont
 
     def setUpTransition(self):
         self.generateStage("Stage/transition.txt")
         self.setUpTransitionFirstObjective()
         self.setUpInvisibleClearUpCheckPoint()
         self.setUpInvisiblePeteCheckPoint()
-        if taskMgr.hasTaskNamed("firstPeteTask"):
-            taskMgr.remove("firstPeteTask")
+        #if taskMgr.hasTaskNamed("firstPeteTask"):
+        #    taskMgr.remove("firstPeteTask")
         taskMgr.add(self.peteTransitionTask, "peteTransitionTask")
         self.setUpTransitionSecondObjective()
         checkpointpos = Vec3(325, 335, 23)
@@ -2043,6 +2242,7 @@ class CharacterController(ShowBase):
         if timeLeft <= 7 and self.peteInteractions["bookIt"]:
             self.peteInteractions["bookIt"] = False
             self.textMessageSpeak("Talking Panda: You're not gonna make it!", line2="Hold [SHIFT] and BOOK IT!")
+            taskMgr.doMethodLater(6, self.textMessageClearTask, "textMessageClearTask")
         if self.SFXticktock.status() != self.SFXticktock.PLAYING:
             self.SFXticktock.play()
         if timeLeft <= 3:
