@@ -1957,7 +1957,7 @@ class CharacterController(ShowBase):
         #self.characterNP.setPos(26.5, 316, 50)
         #self.characterNP.setPos(40, 395, 24)
         #stage2 spawn point
-        #self.characterNP.setPos(200, 335, 24)
+        self.characterNP.setPos(200, 335, 24)
         #self.StageOneCleared switch need to be turned on
         self.stageOneCleared = True
         self.startFromStageOne = False
@@ -1967,10 +1967,10 @@ class CharacterController(ShowBase):
         self.setUpTransition2()
         #self.characterNP.setPos(640, 391, -0)
         #self.characterNP.setPos(640, 364, -30)
-        self.respawnZValue = -150
-        self.characterNP.setPos(656, 856, -64)
+        #self.respawnZValue = -150
+        #self.characterNP.setPos(656, 856, -64)
         #self.characterNP.setPos(656, 847, -108)
-        self.clearStage2Tasks()
+        #self.clearStage2Tasks()
         #invisible detect spawn box 5, 5, 5, 656, 798, -108, sand
 
 
@@ -1998,8 +1998,8 @@ class CharacterController(ShowBase):
     def ATMRespawnTask(self, task):
         if self.characterNP.getZ() <= self.respawnZValue and self.respawning is False and self.playerLives > 1:
             self.respawnATM()
-            selector = random.randint(1, len(self.SFXfallRespawnDict))
-            self.playSfx(self.SFXfallRespawnDict[str(selector)])
+            #selector = random.randint(1, len(self.SFXfallRespawnDict))
+            #self.playSfx(self.SFXfallRespawnDict[str(selector)])
         elif self.characterNP.getZ() <= self.respawnZValue and self.respawning is False and self.playerLives == 1:
             self.respawnATM()
         return task.cont
@@ -2593,7 +2593,7 @@ class CharacterController(ShowBase):
         self.createPete()
 
         #generate the stages
-        #self.setUpStage1()
+        self.setUpStage1()
         self.setUpTransition()
         taskMgr.add(self.ATMRespawnTask, 'ATMrespawnTask')
         # Floor
