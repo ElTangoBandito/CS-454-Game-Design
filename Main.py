@@ -94,6 +94,9 @@ class CharacterController(ShowBase):
         }
 
         self.respawnZValue = -60
+        self.towerExterminationProtocol = False
+        self.towerExterminationCurrentPositionModifier = 0
+        self.towerExterminationLavaStartingPos = Vec3(0,0,0)
 
         #bugfixing switches
         self.stageOneCleared = False
@@ -209,7 +212,8 @@ class CharacterController(ShowBase):
             "stage3-checkpoint-1" : False,
             "stage3-checkpoint-2": False,
             "stage3-checkpoint-3": False,
-            "stage3-checkpoint-4": False
+            "stage3-checkpoint-4": False,
+            "stage3-checkpoint-5": False
         }
 
         #On Screen Texts
@@ -355,6 +359,7 @@ class CharacterController(ShowBase):
         self.SFXcheckpoint = self.loadSfx("Resources/Sound/checkpoint.wav")
         self.SFXfootstep = self.loadSfx("Resources/Sound/footstep.wav")
         self.SFXburnt = self.loadSfx("Resources/Sound/burnt.mp3")
+        self.SFXexterminate = self.loadSfx("Resources/Sound/exterminate.wav")
         self.SFXfootstep.setVolume(0.3)
         self.SFXjump.setVolume(0.05)
         self.SFXdashjump.setVolume(0.05)
@@ -669,6 +674,8 @@ class CharacterController(ShowBase):
         self.updateLife(-1)
         taskMgr.doMethodLater(3, self.checkPointRespawnTask, 'manual respawn')
         self.characterNP.setPos(self.respawnPoint)
+        selector = random.randint(1, len(self.SFXfallRespawnDict))
+        self.playSfx(self.SFXfallRespawnDict[str(selector)])
         if self.playerLives == 0:
             self.textGameOver = OnscreenText(text="GAME OVER", style=1, fg=(1, 0, 0, 1), pos=(0, 0),
                                              align=TextNode.ACenter, scale=0.5)
@@ -676,9 +683,14 @@ class CharacterController(ShowBase):
             taskMgr.remove("updateWorld")
         if self.checkPointDict["stage2-checkpoint-1"] is False and self.peteInteractions["finishedTransitionWalk"]:
             self.peteResetInvisibleGuide()
-        if self.peteCommandsSwitches["commandsEnabled"]:
+        if self.peteCommandsSwitches["commandsEnabled"] and self.peteInteractions["stage2-commanding-section-complete"] is False:
             self.peteNP.setPos(self.peteRespawnPos)
             self.pete.setLinearMovement(Vec3(0, 0, 0), True)
+        if self.towerExterminationProtocol:
+            if self.checkPointDict["stage3-checkpoint-5"]:
+                self.towerExterminationLavaStartingPos = Vec3(self.towerExterminationLavaStartingPos.x, self.towerExterminationLavaStartingPos.y, -80)
+            self.towerMovingHazardBoxNP.setPos(self.towerExterminationLavaStartingPos)
+            self.towerExterminationCurrentPositionModifier = 0
 
     def update(self, task):
         dt = globalClock.getDt()
@@ -1055,10 +1067,74 @@ class CharacterController(ShowBase):
             taskMgr.add(self.movingPlatformForwardTask, "movinghazard", extraArgs=[boxNP, time, speed, direction, Vec3(boxNP.getPos())], appendTask=True)
         elif moving == "static":
             pass
+        elif moving == "tower":
+            self.towerMovingHazardBoxNP = boxNP
+            taskMgr.add(self.movingTowerIdleUpTask, "towerLava",
+                        extraArgs=[boxNP, time, speed, direction, Vec3(boxNP.getPos())], appendTask=True)
         elif moving =="down":
             taskMgr.add(self.movingPlatformDownwardTask, "movinghazardDown", extraArgs=[boxNP, time, speed, direction, Vec3(boxNP.getPos())], appendTask=True)
         taskMgr.add(self.hazardCollisionTask, "hazardcollision", extraArgs=[boxNP], appendTask=True)
         return boxNP
+
+    def movingTowerExterminationProtocolTask(self, boxNP, startPos, task):
+        boxNP.setX(boxNP.getX() - 0.01)
+        if boxNP.getX() <= startPos.x - 7.9:
+            boxNP.setX(startPos.x)
+        boxNP.setZ(boxNP.getZ() + 0.03)
+        if boxNP.getZ() >= self.towerExterminationLavaStartingPos.z + self.towerExterminationCurrentPositionModifier:
+            taskMgr.add(self.movingTowerExterminationProtocolDownTask, "exterminationProtocolUp",
+                        extraArgs=[boxNP, startPos],
+                        appendTask=True)
+            return task.done
+        return task.cont
+
+    def movingTowerExterminationProtocolDownTask(self, boxNP, startPos, task):
+        boxNP.setX(boxNP.getX() - 0.01)
+        if boxNP.getX() <= startPos.x - 7.9:
+            boxNP.setX(startPos.x)
+        boxNP.setZ(boxNP.getZ() - 0.015)
+        if boxNP.getZ() <= self.towerExterminationLavaStartingPos.z + self.towerExterminationCurrentPositionModifier - 3:
+            self.towerExterminationCurrentPositionModifier += 5
+            taskMgr.add(self.movingTowerExterminationProtocolTask, "exterminationProtocolDown",
+                        extraArgs=[boxNP, startPos],
+                        appendTask=True)
+            return task.done
+        return task.cont
+
+    def movingTowerIdleUpTask(self, boxNP, time, speed, direction, startPos, task):
+        if self.towerExterminationProtocol:
+            taskMgr.add(self.movingTowerExterminationProtocolTask, "movingtowerextermination",
+                        extraArgs=[boxNP, startPos], appendTask=True)
+            self.towerExterminationLavaStartingPos = startPos
+            return task.done
+        boxNP.setZ(boxNP.getZ() + speed)
+        boxNP.setX(boxNP.getX() - 0.01)
+        if boxNP.getX() >= startPos.x + 7.9:
+            boxNP.setX(startPos.x)
+        if boxNP.getZ() >= startPos.z + time:
+            taskMgr.add(self.movingTowerIdleDownTask, "movinghazard",
+                        extraArgs=[boxNP, time, speed, direction, startPos],
+                        appendTask=True)
+            return task.done
+        return task.cont
+
+    def movingTowerIdleDownTask(self, boxNP, time, speed, direction, startPos, task):
+        if self.towerExterminationProtocol:
+            taskMgr.add(self.movingTowerExterminationProtocolTask, "movingtowerextermination",
+                        extraArgs=[boxNP, startPos], appendTask=True)
+            self.towerExterminationLavaStartingPos = startPos
+            return task.done
+        boxNP.setZ(boxNP.getZ() - speed)
+        boxNP.setX(boxNP.getX() - 0.01)
+
+        if boxNP.getX() <= startPos.x - 7.9:
+            boxNP.setX(startPos.x)
+        if boxNP.getZ() <= startPos.z - time:
+            taskMgr.add(self.movingTowerIdleUpTask, "movinghazard",
+                        extraArgs=[boxNP, time, speed, direction, startPos],
+                        appendTask=True)
+            return task.done
+        return task.cont
 
     def movingPlatformDownwardTask(self, boxNP, time, speed, direction, startPos, task):
         if direction == 'x':
@@ -1892,9 +1968,11 @@ class CharacterController(ShowBase):
         #self.characterNP.setPos(640, 391, -0)
         #self.characterNP.setPos(640, 364, -30)
         self.respawnZValue = -150
-        #self.characterNP.setPos(620, 598, -120)
-        self.characterNP.setPos(656, 782, -108)
+        self.characterNP.setPos(656, 856, -64)
+        #self.characterNP.setPos(656, 847, -108)
         self.clearStage2Tasks()
+        #invisible detect spawn box 5, 5, 5, 656, 798, -108, sand
+
 
         self.characterNP.setH(45)
         self.characterNP.setCollideMask(BitMask32.allOn())
@@ -1936,11 +2014,37 @@ class CharacterController(ShowBase):
         self.createCheckPoint(checkpointpos, "stage3-checkpoint-2")
         checkpointpos = Vec3(620, 598, -126)
         self.createCheckPoint(checkpointpos, "stage3-checkpoint-3")
-        #checkpointpos = Vec3(620, 598, -126)
-        #self.createCheckPoint(checkpointpos, "stage3-checkpoint-4")
+        checkpointpos = Vec3(656, 843, -111)
+        self.createCheckPoint(checkpointpos, "stage3-checkpoint-4")
         self.setUpStage3FirstObjective()
         self.setUpStage3SecondObjective()
         self.setUpStage3ThirdObjective()
+        box = Box(1, 1, 1, 656, 795, -110, 'sage3invisiblethetowercheckpoint')
+        invisible = self.createInvisibleBox(box)
+        taskMgr.add(self.stage3InvisibleTowerCheckPoint, "stage3towerinvisiblecheckpoint", extraArgs=[invisible], appendTask=True)
+        box = Box(1, 1, 1, 656, 850, -111, 'sage3invisiblethetowercheckpoint')
+        invisible = self.createInvisibleBox(box)
+        taskMgr.add(self.stage3LavaFloorIntiated, "stage3lavaprotocol", extraArgs=[invisible],
+                    appendTask=True)
+        self.setUpStage3FourthObjective()
+        self.setUpStage3FifthObjective()
+        checkpointpos = Vec3(656, 852, -64)
+        self.createCheckPoint(checkpointpos, "stage3-checkpoint-5")
+
+    def stage3InvisibleTowerCheckPoint(self, target, task):
+        if self.characterNP.getDistance(target) <= 10:
+            self.respawnPoint = (Vec3(656, 843, -111))
+            return task.done
+        return task.cont
+
+    def stage3LavaFloorIntiated(self, target, task):
+        if self.characterNP.getDistance(target) <= 12:
+            self.SFXexterminate.play()
+            self.towerExterminationProtocol = True
+            box = Box(5, 5, 5, 656, 798, -108, 'BlockingExit')
+            self.createBox(box, 'techno')
+            return task.done
+        return task.cont
 
     def setUpStage3FirstObjective(self):
         name = "stage3-objective1-timed1"
@@ -1973,6 +2077,26 @@ class CharacterController(ShowBase):
         self.timeObjectivesState[switchName] = False
         self.timeObjectivesState[name] = False
         taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, 6, switchName, name],
+                    appendTask=True)
+
+    def setUpStage3FourthObjective(self):
+        name = "stage3-objective4-timed4"
+        switchName = name + "switch"
+        box = Box(3, 3, 3, 644, 828, -89, name)
+        switch = self.createTimeSwitch(Vec3(688, 828, -95.5), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, 21, switchName, name],
+                    appendTask=True)
+
+    def setUpStage3FifthObjective(self):
+        name = "stage3-objective5-timed4"
+        switchName = name + "switch"
+        box = Box(2, 2, 2, 656, 871, -81, name)
+        switch = self.createTimeSwitch(Vec3(618, 873, -82.5), switchName)
+        self.timeObjectivesState[switchName] = False
+        self.timeObjectivesState[name] = False
+        taskMgr.add(self.createTimeObjectiveReverse, name, extraArgs=[box, 'sand', switch, 8, switchName, name],
                     appendTask=True)
 
     def setUpStage2(self):
