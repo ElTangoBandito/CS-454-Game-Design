@@ -213,7 +213,8 @@ class CharacterController(ShowBase):
             "stage3-checkpoint-2": False,
             "stage3-checkpoint-3": False,
             "stage3-checkpoint-4": False,
-            "stage3-checkpoint-5": False
+            "stage3-checkpoint-5": False,
+            "stage3-checkpoint-6": False
         }
 
         #On Screen Texts
@@ -344,7 +345,10 @@ class CharacterController(ShowBase):
     def loadSounds(self):
         #BGM
         self.BGM1 = self.loadMusic("Resources/BGM/Bramble Blast.mp3")
-        self.BGM2 = self.loadMusic("Resources/BGM/Bramble Blast (Remix).mp3")
+        #self.BGM2 = self.loadMusic("Resources/BGM/Bramble Blast (Remix).mp3")
+        self.BGM2 = self.loadMusic("Resources/BGM/Path of Goddess Claire.mp3")
+        self.BGM3 = self.loadMusic("Resources/BGM/Another Medium.mp3")
+        self.BGM4 = self.loadMusic("Resources/BGM/Flaming Bonds are Being Tested.mp3")
         self.playMusic(self.BGM1, looping=1, volume = 0.1)
 
         #sound effectt
@@ -687,7 +691,10 @@ class CharacterController(ShowBase):
             self.peteNP.setPos(self.peteRespawnPos)
             self.pete.setLinearMovement(Vec3(0, 0, 0), True)
         if self.towerExterminationProtocol:
-            if self.checkPointDict["stage3-checkpoint-5"]:
+            if self.checkPointDict["stage3-checkpoint-6"]:
+                self.towerExterminationLavaStartingPos = Vec3(self.towerExterminationLavaStartingPos.x,
+                                                              self.towerExterminationLavaStartingPos.y, -5)
+            elif self.checkPointDict["stage3-checkpoint-5"]:
                 self.towerExterminationLavaStartingPos = Vec3(self.towerExterminationLavaStartingPos.x, self.towerExterminationLavaStartingPos.y, -80)
             self.towerMovingHazardBoxNP.setPos(self.towerExterminationLavaStartingPos)
             self.towerExterminationCurrentPositionModifier = 0
@@ -1094,7 +1101,8 @@ class CharacterController(ShowBase):
             boxNP.setX(startPos.x)
         boxNP.setZ(boxNP.getZ() - 0.015)
         if boxNP.getZ() <= self.towerExterminationLavaStartingPos.z + self.towerExterminationCurrentPositionModifier - 3:
-            self.towerExterminationCurrentPositionModifier += 5
+            if boxNP.getZ() < 46:
+                self.towerExterminationCurrentPositionModifier += 5
             taskMgr.add(self.movingTowerExterminationProtocolTask, "exterminationProtocolDown",
                         extraArgs=[boxNP, startPos],
                         appendTask=True)
@@ -1957,7 +1965,7 @@ class CharacterController(ShowBase):
         #self.characterNP.setPos(26.5, 316, 50)
         #self.characterNP.setPos(40, 395, 24)
         #stage2 spawn point
-        self.characterNP.setPos(200, 335, 24)
+        #self.characterNP.setPos(200, 335, 24)
         #self.StageOneCleared switch need to be turned on
         self.stageOneCleared = True
         self.startFromStageOne = False
@@ -1967,8 +1975,10 @@ class CharacterController(ShowBase):
         self.setUpTransition2()
         #self.characterNP.setPos(640, 391, -0)
         #self.characterNP.setPos(640, 364, -30)
-        #self.respawnZValue = -150
-        #self.characterNP.setPos(656, 856, -64)
+        self.setUpStage3()
+        self.respawnZValue = -150
+
+        self.characterNP.setPos(650, 848, 70)
         #self.characterNP.setPos(656, 847, -108)
         #self.clearStage2Tasks()
         #invisible detect spawn box 5, 5, 5, 656, 798, -108, sand
@@ -2008,6 +2018,7 @@ class CharacterController(ShowBase):
         self.generateStage("Stage/stage3.txt")
         self.generateHazard("Stage/stage3lava.txt")
         self.generateCoins("Stage/stage3coins.txt")
+        self.generateBalls("Stage/stage3balls.txt")
         checkpointpos = Vec3(640, 391, -97)
         self.createCheckPoint(checkpointpos, "stage3-checkpoint-1")
         checkpointpos = Vec3(620, 476, -97)
@@ -2030,10 +2041,12 @@ class CharacterController(ShowBase):
         self.setUpStage3FifthObjective()
         checkpointpos = Vec3(656, 852, -64)
         self.createCheckPoint(checkpointpos, "stage3-checkpoint-5")
-
+        checkpointpos = Vec3(655, 840, 11)
+        self.createCheckPoint(checkpointpos, "stage3-checkpoint-6")
     def stage3InvisibleTowerCheckPoint(self, target, task):
         if self.characterNP.getDistance(target) <= 10:
             self.respawnPoint = (Vec3(656, 843, -111))
+            taskMgr.add(self.musicFadeOut, 'musicFade', extraArgs=[self.BGM3], appendTask=True)
             return task.done
         return task.cont
 
@@ -2043,6 +2056,7 @@ class CharacterController(ShowBase):
             self.towerExterminationProtocol = True
             box = Box(5, 5, 5, 656, 798, -108, 'BlockingExit')
             self.createBox(box, 'techno')
+            self.playMusic(self.BGM4, looping=1, volume=0.1)
             return task.done
         return task.cont
 
@@ -2249,38 +2263,40 @@ class CharacterController(ShowBase):
         if self.characterNP.getDistance(target) <= 26:
             if stage == "stage1":
                 self.clearStage1Tasks()
+                taskMgr.add(self.musicFadeOut, 'musicFade', extraArgs=[self.BGM1], appendTask=True)
                 #taskMgr.add(self.musicFadeOut, 'musicFade')
             if stage == "stage2":
                 self.respawnZValue = -150
                 self.respawnPoint = Vec3(640, 391, -0)
                 self.clearStage2Tasks()
-            taskMgr.add(self.musicFadeOut, 'musicFade')
+                taskMgr.add(self.musicFadeOut, 'musicFade', extraArgs=[self.BGM2], appendTask = True)
+                self.playMusic(self.BGM3, looping=1, volume=0.1)
             #also set the new shit here
             return task.done
         return task.cont
 
-    def musicFadeOut(self, task):
+    def musicFadeOut(self, BGM, task):
         if task.time > 2:
-            self.BGM1.stop()
+            BGM.stop()
             return task.done
         elif task.time > 1.8:
-            self.BGM1.setVolume(0.01)
+            BGM.setVolume(0.01)
         elif task.time > 1.6:
-            self.BGM1.setVolume(0.02)
+            BGM.setVolume(0.02)
         elif task.time > 1.4:
-            self.BGM1.setVolume(0.03)
+            BGM.setVolume(0.03)
         elif task.time > 1.2:
-            self.BGM1.setVolume(0.04)
+            BGM.setVolume(0.04)
         elif task.time > 1:
-            self.BGM1.setVolume(0.05)
+            BGM.setVolume(0.05)
         elif task.time > 0.8:
-            self.BGM1.setVolume(0.06)
+            BGM.setVolume(0.06)
         elif task.time > 0.6:
-            self.BGM1.setVolume(0.07)
+            BGM.setVolume(0.07)
         elif task.time > 0.4:
-            self.BGM1.setVolume(0.08)
+            BGM.setVolume(0.08)
         elif task.time > 0.2:
-            self.BGM1.setVolume(0.09)
+            BGM.setVolume(0.09)
         return task.cont
 
     def setUpStage1(self):
