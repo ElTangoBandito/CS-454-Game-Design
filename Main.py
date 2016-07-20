@@ -38,6 +38,11 @@ from panda3d.bullet import BulletTriangleMeshShape
 from panda3d.bullet import BulletSoftBodyNode
 from panda3d.bullet import BulletSoftBodyConfig
 from panda3d.bullet import ZUp
+
+from direct.gui.DirectGui import DirectScrolledFrame
+from direct.gui.DirectGui import DirectButton
+from direct.gui.DirectGui import DirectFrame
+from direct.gui.OnscreenImage import OnscreenImage
 from direct.gui.OnscreenText import OnscreenText
 
 from math import pi, sin, cos
@@ -45,11 +50,14 @@ from Box import *
 import random
 
 class CharacterController(ShowBase):
+
     def __init__(self):
 
         ShowBase.__init__(self)
         #self.stage3Light = False
         self.loadSounds()
+        self.showMenu()
+        '''
         self.setupLights()
         # Input
         self.accept('escape', self.doExit)
@@ -101,18 +109,17 @@ class CharacterController(ShowBase):
         #bugfixing switches
         self.stageOneCleared = False
         self.startFromStageOne = True
+        self.startFromStageTwo = False
+        self.startFromStageThree = False
+
         self.setup()
-        #base.setBackgroundColor(0.1, 0.1, 0.8, 1)
         base.setBackgroundColor(0.1, 0.1, 0.1, 1)
         base.setFrameRateMeter(True)
         base.disableMouse()
-        #base.camera.setPos(self.characterNP.getX(), self.characterNP.getY() + 10, 4)
-        # base.camera.setHpr(self.characterNP.getHpr())
         base.camera.lookAt(self.characterNP)
-        # Create a floater object.  We use the "floater" as a temporary
-        # variable in a variety of calculations.
         self.floater = NodePath(PandaNode("floater"))
         self.floater.reparentTo(render)
+
 
         #ATM state
         #self.isMoving = False
@@ -227,6 +234,7 @@ class CharacterController(ShowBase):
         #textObject = OnscreenText(text='my text string', style = 1, fg=(1,1,0,1), pos=(-1.3, 0.95), align=TextNode.ALeft, scale=0.07)
         #textObject.destroy()
         self.displayHUD()
+
         taskMgr.add(self.playerStatsWatcher, "playerStatsMonitor")
         self.ATMPosX = self.characterNP.getX()
         self.ATMPosY = self.characterNP.getY()
@@ -235,7 +243,255 @@ class CharacterController(ShowBase):
         self.ATMPoisitionMonitorText = OnscreenText(text=self.ATMPos, style = 1, fg=(1,1,1,1), pos = (1.3,-0.95), align=TextNode.A_right, scale = 0.08)
         taskMgr.add(self.ATMPositionMonitor, "playerPositionMonitor")
 
+
         #self.HUDTexts[1].setText("test")
+        '''
+
+    def startUp(self, stage=""):
+        self.setupLights()
+        # Input
+        self.accept('escape', self.doExit)
+        # self.accept('r', self.doReset)
+        #self.accept('f3', self.toggleDebug)
+        self.accept('space', self.doJump)
+
+        inputState.watchWithModifiers('forward', 'w')
+        inputState.watchWithModifiers('reverse', 's')
+        inputState.watchWithModifiers('turnLeft', 'a')
+        inputState.watchWithModifiers('turnRight', 'd')
+        inputState.watchWithModifiers('cameraUp', 'arrow_up')
+        inputState.watchWithModifiers('cameraDown', 'arrow_down')
+        inputState.watchWithModifiers('cameraRight', 'arrow_right')
+        inputState.watchWithModifiers('cameraLeft', 'arrow_left')
+        inputState.watchWithModifiers('zoomOut', 'q')
+        inputState.watchWithModifiers('zoomIn', 'e')
+        inputState.watchWithModifiers('dash', 'shift')
+        inputState.watchWithModifiers('dashJump', 'space')
+        inputState.watchWithModifiers('autoCameraOn', 'p')
+        inputState.watchWithModifiers('autoCameraOff', 'o')
+        inputState.watchWithModifiers('helpHud', 'f1')
+        inputState.watchWithModifiers('closeHelpHud', 'f2')
+        inputState.watchWithModifiers('respawn', 'f8')
+
+        # Stages
+        self.stage1 = []
+        # Objectives
+        self.stage1Objective = {}
+
+        # Task
+        taskMgr.add(self.update, 'updateWorld')
+
+        # time objectives
+        self.timeObjectivesState = {
+            "stage1objective1": False,
+            "stage1objective2": False,
+            "stage1objective3": False,
+            "objectiveCleared": False,
+            "objectiveSet": False,
+            "objective2Set": False
+        }
+
+        self.respawnZValue = -60
+        self.towerExterminationProtocol = False
+        self.towerExterminationCurrentPositionModifier = 0
+        self.towerExterminationLavaStartingPos = Vec3(0, 0, 0)
+
+        # bugfixing switches
+        self.stageOneCleared = False
+        self.startFromStageOne = True
+        self.startFromStageTwo = False
+        self.startFromStageThree = False
+        if stage == "stage2":
+            self.startFromStageTwo = True
+            self.startFromStageOne = False
+        elif stage == "stage3":
+            self.startFromStageThree = True
+            self.startFromStageOne = False
+
+
+        self.setup()
+        base.setBackgroundColor(0.1, 0.1, 0.1, 1)
+        base.setFrameRateMeter(True)
+        base.disableMouse()
+        base.camera.lookAt(self.characterNP)
+        self.floater = NodePath(PandaNode("floater"))
+        self.floater.reparentTo(render)
+
+        # ATM state
+        # self.isMoving = False
+        # self.isJumping = False
+        self.isLanding = False
+        self.isDashJumping = False
+        # self.isRunningAndJumping = False
+        # self.isRunningAndJumpingAndLanding = False
+        # self.isLandedFromRun = False
+        # animation switches
+        self.gameOver = False
+        self.animationRunning = False
+        self.animationDashing = False
+        self.animationIdle = False
+        self.animationLanding = False
+        self.landingAnimation = False
+        self.firstBalloonsAcquired = False
+        # self.isDashing = False
+        self.cdmax = 20
+        self.cdmin = 10
+
+        # keyOptions
+        self.cameraAutoTurn = True
+
+        # Player stats
+        self.playerLives = 3
+        self.playerScore = 0
+        self.switchScoreToLife = False
+        # self.playerHealth = 3
+        # Pete's switches and other stuff
+        # self.peteIsActive = False
+        # self.peteIdentifer = 0
+        # self.peteTaskAssigned = False
+        self.peteState = {
+            "isWalking": False,
+            "isJumping": False
+        }
+        self.peteInteractions = {
+            "firstTask-SFXUnknown": False,
+            "firstDialogue-Stage1": False,
+            "secondDialogue-Stage1": False,
+            "thirdDialogue-Stage1": False,
+            "fourthDialogue-stage1": False,
+            "doorDestroyed": False,
+            "bookIt": False,
+            "grandPillarSpawn": False,
+            "stage1Cleared": False,
+            "transitionDialogue1": False,
+            "transitionDoubleSwitchBegniWalk": False,
+            "transitionDoubleSwitchDoorUnlocked": False,
+            "transitionWalkingToEdge": False,
+            "onInvisiblePlatform": False,
+            "havePeteJumpInPlace": False,
+            "finishedTransitionWalk": False,
+            "stage2-third-dialogue": False,
+            "stage2-commanding-section-complete": False
+        }
+        self.peteInteractionsDialogueSwitches = {
+            "switch1": False,
+            "switch2": False,
+            "switch3": False,
+            "switch4": False,
+            "switch5": False
+        }
+
+        self.peteInvisibleGuideSwitches = {
+            "switch1": False,
+            "switch2": False,
+            "switch3": False,
+            "switch4": False,
+            "switch5": False,
+            "switch6": False,
+            "switch7": False,
+            "switch8": False
+        }
+        self.peteCommandsSwitches = {
+            "commandsEnabled": False,
+            "go": False,
+            "stop": False,
+            "going": False
+        }
+        self.peteFirstTaskUnknownSFX = False
+        self.peteRespawnPos = Vec3(0, 0, 0)
+
+        # checkpoint
+        self.respawnPoint = Vec3(self.characterNP.getX(), self.characterNP.getY(), self.characterNP.getZ())
+        self.respawning = False
+        self.checkPointDict = {
+            "stage1-checkpoint-1": False,
+            "stage1-checkpoint-2": False,
+            "stage1-checkpoint-3": False,
+            "stage1-checkpoint-4": False,
+            "transition-checkpoint": False,
+            "stage2-checkpoint-1": False,
+            "stage2-checkpoint-2": False,
+            "stage2-checkpoint-3": False,
+            "stage3-checkpoint-1": False,
+            "stage3-checkpoint-2": False,
+            "stage3-checkpoint-3": False,
+            "stage3-checkpoint-4": False,
+            "stage3-checkpoint-5": False,
+            "stage3-checkpoint-6": False
+        }
+
+        # On Screen Texts
+        self.helpHudOn = False
+        self.HUDTexts = []
+        self.helpTexts = []
+        self.textMessage = OnscreenText(text="", style=1, fg=(1, 1, 1, 1), bg=(0.7, 0.4, 0.1, 1), pos=(0, -0.7),
+                                        align=TextNode.ACenter, scale=0.06)
+        self.textMessage2 = OnscreenText(text="", style=1, fg=(1, 1, 1, 1), bg=(0.7, 0.4, 0.1, 1), pos=(0, -0.8),
+                                         align=TextNode.ACenter, scale=0.06)
+        self.textTimeAlert = OnscreenText(text="", style=1, fg=(1, 1, 1, 1), pos=(0.0, 0.80), align=TextNode.ACenter,
+                                          scale=0.12)
+        # textObject = OnscreenText(text='my text string', style = 1, fg=(1,1,0,1), pos=(-1.3, 0.95), align=TextNode.ALeft, scale=0.07)
+        # textObject.destroy()
+        self.displayHUD()
+
+        taskMgr.add(self.playerStatsWatcher, "playerStatsMonitor")
+        '''
+        self.ATMPosX = self.characterNP.getX()
+        self.ATMPosY = self.characterNP.getY()
+        self.ATMPosZ = self.characterNP.getZ()
+        self.ATMPos = "(" + str(self.ATMPosX) + ", " + str(self.ATMPosY) + ", " + str(self.ATMPosZ) + ")"
+        self.ATMPoisitionMonitorText = OnscreenText(text=self.ATMPos, style=1, fg=(1, 1, 1, 1), pos=(1.3, -0.95),
+                                                    align=TextNode.A_right, scale=0.08)
+        taskMgr.add(self.ATMPositionMonitor, "playerPositionMonitor")
+        '''
+
+        # self.HUDTexts[1].setText("test")
+
+    def showMenu(self):
+        self.playMusic(self.MenuBGM, looping=1, volume=0.1)
+        self.mainFrame = DirectFrame(frameColor = (0,0,0,1), frameSize = (-1, 1, -1, 1), pos=(0,0,0))
+        self.subFrame = DirectFrame(parent = self.mainFrame, frameColor = (0,0,0,1), frameSize = (-1, 1, -1, 1), pos=(0,0,-0.2))
+        titleImage = OnscreenImage(parent=self.mainFrame, image = 'Resources/Images/A Test of Metal.png', pos=(0,0,0.5), scale=(1, 0, 0.4))
+        startButton = DirectButton(parent = self.subFrame, text="Start", pos=(0, 0, 0.1), scale = .1, command = self.gameStartButton, rolloverSound = self.SFXstapler, clickSound=self.SFXpling)
+        stageSelectButton = DirectButton(parent=self.subFrame, text="Stage Select", pos=(0, 0, -0.1), scale=.1, command=self.stageSelectButton, rolloverSound = self.SFXstapler, clickSound=self.SFXpling)
+        quitButton = DirectButton(parent=self.subFrame, text="Quit", rolloverSound = self.SFXstapler, pos=(0, 0, -0.3), scale=.1,
+                                         command=self.doExit, clickSound=self.SFXpling)
+        self.stageSelectFrame = DirectFrame(parent=self.mainFrame, frameColor=(0, 0, 0, 1), frameSize=(-1, 1, -1, 1),
+                                            pos=(0, 0, -0.8))
+        stage1Button = DirectButton(parent=self.stageSelectFrame, text="Stage1", text_scale=(0.5), text_pos=(0,0.5,0), text_fg=(0.8,0.1,0.1,1), image = "Resources/Images/stage1.jpg", pos=(-0.6, 0, 0.5), scale=.25,
+                                   command=self.stage1Button, rolloverSound=self.SFXstapler,
+                                   clickSound=self.SFXpling)
+        stage2Button = DirectButton(parent=self.stageSelectFrame, text="Stage2", text_scale=(0.5), text_pos=(0,0.5,0), text_fg=(1,1,1.1,1), image = "Resources/Images/stage2.jpg", pos=(0, 0, 0.5), scale=.25,
+                                         command=self.stage2Button, rolloverSound=self.SFXstapler,
+                                         clickSound=self.SFXpling)
+        stage3Button = DirectButton(parent=self.stageSelectFrame, text="Stage3", text_scale=(0.5), text_pos=(0,0.5,0), text_fg=(0,0,0.8,1), image = "Resources/Images/stage3.jpg", rolloverSound=self.SFXstapler, pos=(0.6, 0, 0.5),
+                                  scale=.25,
+                                  command=self.stage3Button, clickSound=self.SFXpling)
+        backButton = DirectButton(parent=self.stageSelectFrame, text="Back", rolloverSound=self.SFXstapler, pos=(0, 0, 0),
+                                  scale=.1,
+                                  command=self.backButton, clickSound=self.SFXpling)
+        self.stageSelectFrame.hide()
+
+    def gameStartButton(self, stage=""):
+        self.startUp(stage = stage)
+        self.mainFrame.hide()
+
+    def stage1Button(self):
+        self.gameStartButton(stage = "stage1")
+
+    def stage2Button(self):
+        self.gameStartButton(stage = "stage2")
+
+    def stage3Button(self):
+        self.gameStartButton(stage = "stage3")
+
+    def backButton(self):
+        self.stageSelectFrame.hide()
+        self.subFrame.show()
+
+    def stageSelectButton(self):
+        self.subFrame.hide()
+        self.stageSelectFrame.show()
 
     def generateStage(self, fileName):
         counter = 1
@@ -349,7 +605,8 @@ class CharacterController(ShowBase):
         self.BGM2 = self.loadMusic("Resources/BGM/Path of Goddess Claire.mp3")
         self.BGM3 = self.loadMusic("Resources/BGM/Another Medium.mp3")
         self.BGM4 = self.loadMusic("Resources/BGM/Flaming Bonds are Being Tested.mp3")
-        self.playMusic(self.BGM1, looping=1, volume = 0.1)
+        self.MenuBGM = self.loadMusic("Resources/BGM/Streetwise.mp3")
+        #self.playMusic(self.BGM1, looping=1, volume = 0.1)
 
         #sound effectt
         self.SFXjump = self.loadSfx("Resources/Sound/Jump.mp3")
@@ -364,10 +621,15 @@ class CharacterController(ShowBase):
         self.SFXfootstep = self.loadSfx("Resources/Sound/footstep.wav")
         self.SFXburnt = self.loadSfx("Resources/Sound/burnt.mp3")
         self.SFXexterminate = self.loadSfx("Resources/Sound/exterminate.wav")
+        self.SFXgameover = self.loadSfx("Resources/Sound/Game Over.mp3")
+        self.SFXpling = self.loadSfx("Resources/Sound/Pling.mp3")
+        self.SFXstapler = self.loadSfx("Resources/Sound/stapler.mp3")
         self.SFXfootstep.setVolume(0.3)
         self.SFXjump.setVolume(0.05)
         self.SFXdashjump.setVolume(0.05)
         self.SFXcheckpoint.setVolume(0.3)
+        self.SFXpling.setVolume(0.05)
+        self.SFXstapler.setVolume(0.05)
 
         #voice
         self.SFXballoons = self.loadSfx("Resources/Voice/balloons.wav")
@@ -381,6 +643,7 @@ class CharacterController(ShowBase):
         self.SFXbreathe = self.loadSfx("Resources/Voice/breathe.wav")
         self.SFXsensors = self.loadSfx("Resources/Voice/sensors.wav")
         self.SFXspeedOfLight = self.loadSfx("Resources/Voice/speedoflight.wav")
+        self.SFXtestOfMetal = self.loadSfx("Resources/Voice/A Test of Metal.wav")
         self.SFXfall1 = self.loadSfx("Resources/Voice/fall respawn1.wav")
         self.SFXfall2 = self.loadSfx("Resources/Voice/fall respawn2.wav")
         self.SFXfall3 = self.loadSfx("Resources/Voice/fall respawn3.wav")
@@ -684,7 +947,9 @@ class CharacterController(ShowBase):
             self.textGameOver = OnscreenText(text="GAME OVER", style=1, fg=(1, 0, 0, 1), pos=(0, 0),
                                              align=TextNode.ACenter, scale=0.5)
             self.gameOver = True
+            self.SFXgameover.play()
             taskMgr.remove("updateWorld")
+            #self.cleanup()
         if self.checkPointDict["stage2-checkpoint-1"] is False and self.peteInteractions["finishedTransitionWalk"]:
             self.peteResetInvisibleGuide()
         if self.peteCommandsSwitches["commandsEnabled"] and self.peteInteractions["stage2-commanding-section-complete"] is False:
@@ -809,8 +1074,12 @@ class CharacterController(ShowBase):
         return task.cont
     '''
     def cleanup(self):
-        self.world = None
-        self.render.removeNode()
+        taskList = taskMgr.getAllTasks()
+        for task in taskList:
+            taskMgr.remove(task)
+
+        #self.world = None
+        #self.render.removeNode()
 
     def setupLights(self):
         # Light
@@ -1301,6 +1570,8 @@ class CharacterController(ShowBase):
             return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/dry/brick.egg')
         elif modelName == "grassy":
             return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/grassy/brick.egg')
+        elif modelName == "flowers":
+            return loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/flowers/brick.egg')
         else:
             print modelName
             return "No model under that name"
@@ -1887,6 +2158,44 @@ class CharacterController(ShowBase):
             return task.done
         return task.cont
 
+    def peteStage3FinalDialogue(self, task):
+        self.peteNP.lookAt(self.characterNP)
+        self.peteActorNP.lookAt(self.characterNP)
+        self.peteActorNP.setH(self.peteActorNP.getH() + 180)
+        text = "Pete: "
+        if self.peteActorNP.getDistance(self.characterNP) <= 16:
+            taskMgr.add(self.musicFadeOut, "musicFade", extraArgs=[self.BGM4], appendTask = True)
+            self.textMessageSpeak(text + "ATM! You made it! I found a shortcut when I was stuck underground.",
+                                  line2="There's the exit ATM! We're finally free!!")
+            taskMgr.doMethodLater(7, self.textMessageClearTask, "textMessageClear")
+            taskMgr.doMethodLater(7, self.gameOverTask, "gameover")
+            taskMgr.doMethodLater(4, self.ATMMessageSpeak, "ATMMessage", extraArgs=[self.SFXtestOfMetal], appendTask=True)
+            render.clearFog()
+            return task.done
+        return task.cont
+
+    def gameOverTask(self, task):
+        self.textGameOver = OnscreenText(text="CONGRADULATIONS!", style=1, fg=(1, 0.7, 0, 1), pos=(0, 0.7),
+                                             align=TextNode.ACenter, scale=0.15)
+
+        self.livesMultiplierScore = OnscreenText(
+            text="Batteries: " + str(self.playerLives) + " X 5000 = " + str(self.playerLives * 5000), style=1,
+            fg=(1, 1, 1, 1), pos=(0, 0.5),
+            align=TextNode.ACenter, scale=0.1)
+        self.playerCurrentScore = OnscreenText(text="Current Score: " + " + " + str(self.playerScore), style=1,
+                                               fg=(1, 1, 1, 1), pos=(0, 0.3),
+                                               align=TextNode.ACenter, scale=0.1)
+        self.underLineResult = OnscreenText(text="_____________________________", style=1,
+                                            fg=(1, 1, 1, 1), pos=(0, 0.2),
+                                            align=TextNode.ACenter, scale=0.1)
+        self.totalScoreResult = OnscreenText(text="TOTAL SCORE: " + str(self.playerLives * 5000 + self.playerScore),
+                                             style=1,
+                                             fg=(0.5, 1, 0.1, 1), pos=(0, -0.2),
+                                             align=TextNode.ACenter, scale=0.2)
+        taskMgr.remove("updateWorld")
+        self.SFXgameover.play()
+        return task.done
+
     def commandGo(self):
         if self.peteCommandsSwitches['go'] is False and self.peteCommandsSwitches["commandsEnabled"]:
             self.peteCommandsSwitches["go"] = True
@@ -1961,24 +2270,32 @@ class CharacterController(ShowBase):
         self.character = BulletCharacterControllerNode(shape, 0.4, 'Player')
         #self.character.Node().setMass(1.0)
         self.characterNP = self.render.attachNewNode(self.character)
-        #self.characterNP.setPos(12, 55, 4)
+        if self.startFromStageOne:
+            self.characterNP.setPos(12, 55, 4)
+        elif self.startFromStageTwo:
+            self.characterNP.setPos(200, 335, 24)
+        elif self.startFromStageThree:
+            self.characterNP.setPos(640, 391, 0)
+            #self.characterNP.setPos(627, 936, 70)
+            #self.setUpStage3()
         #self.characterNP.setPos(26.5, 316, 50)
         #self.characterNP.setPos(40, 395, 24)
         #stage2 spawn point
         #self.characterNP.setPos(200, 335, 24)
         #self.StageOneCleared switch need to be turned on
-        self.stageOneCleared = True
-        self.startFromStageOne = False
+        #self.stageOneCleared = True
+        #self.startFromStageOne = False
 
         #self.setUpStage2()
         #self.characterNP.setPos(664,416, 50)
-        self.setUpTransition2()
-        #self.characterNP.setPos(640, 391, -0)
+        #self.setUpTransition2()
+        #self.characterNP.setPos(640, 391, 0)
         #self.characterNP.setPos(640, 364, -30)
-        self.setUpStage3()
-        self.respawnZValue = -150
+        #self.setUpStage3()
+        #self.respawnZValue = -150
+        #self.startFromStageThree = True
 
-        self.characterNP.setPos(650, 848, 70)
+        #self.characterNP.setPos(650, 848, 70)
         #self.characterNP.setPos(656, 847, -108)
         #self.clearStage2Tasks()
         #invisible detect spawn box 5, 5, 5, 656, 798, -108, sand
@@ -2043,6 +2360,7 @@ class CharacterController(ShowBase):
         self.createCheckPoint(checkpointpos, "stage3-checkpoint-5")
         checkpointpos = Vec3(655, 840, 11)
         self.createCheckPoint(checkpointpos, "stage3-checkpoint-6")
+
     def stage3InvisibleTowerCheckPoint(self, target, task):
         if self.characterNP.getDistance(target) <= 10:
             self.respawnPoint = (Vec3(656, 843, -111))
@@ -2057,6 +2375,10 @@ class CharacterController(ShowBase):
             box = Box(5, 5, 5, 656, 798, -108, 'BlockingExit')
             self.createBox(box, 'techno')
             self.playMusic(self.BGM4, looping=1, volume=0.1)
+            if self.startFromStageThree:
+                self.createPete()
+            self.peteNP.setPos(650, 924, 64)
+            taskMgr.add(self.peteStage3FinalDialogue, "gameoverDialogue")
             return task.done
         return task.cont
 
@@ -2609,8 +2931,16 @@ class CharacterController(ShowBase):
         self.createPete()
 
         #generate the stages
-        self.setUpStage1()
-        self.setUpTransition()
+        if self.startFromStageOne:
+            self.setUpStage1()
+            self.setUpTransition()
+            self.playMusic(self.BGM1, looping=1, volume=0.1)
+        elif self.startFromStageTwo:
+            self.setUpStage1()
+            self.setUpTransition()
+            self.playMusic(self.BGM1, looping=1, volume=0.1)
+        elif self.startFromStageThree:
+            self.setUpTransition2()
         taskMgr.add(self.ATMRespawnTask, 'ATMrespawnTask')
         # Floor
         # shape = BulletPlaneShape(Vec3(0, 0, 1), 0)
@@ -2662,6 +2992,16 @@ class CharacterController(ShowBase):
         self.env.setScale(3)
 
         taskMgr.add(self.backgroundTask, "background", extraArgs=[False], appendTask=True)
+
+        if self.startFromStageThree:
+            self.env.removeNode()
+            self.env = loader.loadModel('Resources/Models/ModelCollection/EnvBuildingBlocks/bg/PeachSky.egg')
+            self.env.reparentTo(render)
+            self.env.setScale(3)
+            self.plight = PointLight('plight')
+            self.plnp = self.render.attachNewNode(self.plight)
+            self.env.setLight(self.plnp)
+            self.plnp.setPos(self.characterNP.getPos())
 
 
 game = CharacterController()
