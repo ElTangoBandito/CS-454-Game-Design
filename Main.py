@@ -39,7 +39,7 @@ from panda3d.bullet import BulletSoftBodyNode
 from panda3d.bullet import BulletSoftBodyConfig
 from panda3d.bullet import ZUp
 
-from direct.gui.DirectGui import DirectScrolledFrame
+from direct.gui.DirectGui import DirectCheckButton
 from direct.gui.DirectGui import DirectButton
 from direct.gui.DirectGui import DirectFrame
 from direct.gui.OnscreenImage import OnscreenImage
@@ -56,6 +56,7 @@ class CharacterController(ShowBase):
         ShowBase.__init__(self)
         #self.stage3Light = False
         self.loadSounds()
+        self.tasteTheRainbow = False
         self.showMenu()
         '''
         self.setupLights()
@@ -250,10 +251,10 @@ class CharacterController(ShowBase):
     def startUp(self, stage=""):
         self.setupLights()
         # Input
-        self.accept('escape', self.doExit)
+        #self.accept('escape', self.doExit)
         # self.accept('r', self.doReset)
         #self.accept('f3', self.toggleDebug)
-        self.accept('space', self.doJump)
+        #self.accept('space', self.doJump)
 
         inputState.watchWithModifiers('forward', 'w')
         inputState.watchWithModifiers('reverse', 's')
@@ -451,6 +452,7 @@ class CharacterController(ShowBase):
         self.playMusic(self.MenuBGM, looping=1, volume=0.1)
         self.mainFrame = DirectFrame(frameColor = (0,0,0,1), frameSize = (-1, 1, -1, 1), pos=(0,0,0))
         self.subFrame = DirectFrame(parent = self.mainFrame, frameColor = (0,0,0,1), frameSize = (-1, 1, -1, 1), pos=(0,0,-0.2))
+        tasteTheRainbowButton = DirectCheckButton(parent = self.mainFrame, text = "Taste the Rainbow", scale = 0.05, pos = (0.7,0,0.93), command = self.tasteTheRainbowCheck)
         titleImage = OnscreenImage(parent=self.mainFrame, image = 'Resources/Images/A Test of Metal.png', pos=(0,0,0.5), scale=(1, 0, 0.4))
         startButton = DirectButton(parent = self.subFrame, text="Start", pos=(0, 0, 0.1), scale = .1, command = self.gameStartButton, rolloverSound = self.SFXstapler, clickSound=self.SFXpling)
         stageSelectButton = DirectButton(parent=self.subFrame, text="Stage Select", pos=(0, 0, -0.1), scale=.1, command=self.stageSelectButton, rolloverSound = self.SFXstapler, clickSound=self.SFXpling)
@@ -458,19 +460,25 @@ class CharacterController(ShowBase):
                                          command=self.doExit, clickSound=self.SFXpling)
         self.stageSelectFrame = DirectFrame(parent=self.mainFrame, frameColor=(0, 0, 0, 1), frameSize=(-1, 1, -1, 1),
                                             pos=(0, 0, -0.8))
-        stage1Button = DirectButton(parent=self.stageSelectFrame, text="Stage1", text_scale=(0.5), text_pos=(0,0.5,0), text_fg=(0.8,0.1,0.1,1), image = "Resources/Images/stage1.jpg", pos=(-0.6, 0, 0.5), scale=.25,
+        stage1Button = DirectButton(parent=self.stageSelectFrame, text="Stage1", text_scale=(0.5), text_pos=(0,1.2,0), text_fg=(0.8,0.1,0.1,1), image = "Resources/Images/stage1.jpg", pos=(-0.6, 0, 0.5), scale=.25,
                                    command=self.stage1Button, rolloverSound=self.SFXstapler,
-                                   clickSound=self.SFXpling)
-        stage2Button = DirectButton(parent=self.stageSelectFrame, text="Stage2", text_scale=(0.5), text_pos=(0,0.5,0), text_fg=(1,1,1.1,1), image = "Resources/Images/stage2.jpg", pos=(0, 0, 0.5), scale=.25,
+                                   clickSound=self.SFXpling, relief=None)
+        stage2Button = DirectButton(parent=self.stageSelectFrame, text="Stage2", text_scale=(0.5), text_pos=(0,1.2,0), text_fg=(1,1,1.1,1), image = "Resources/Images/stage2.jpg", pos=(0, 0, 0.5), scale=.25,
                                          command=self.stage2Button, rolloverSound=self.SFXstapler,
-                                         clickSound=self.SFXpling)
-        stage3Button = DirectButton(parent=self.stageSelectFrame, text="Stage3", text_scale=(0.5), text_pos=(0,0.5,0), text_fg=(0,0,0.8,1), image = "Resources/Images/stage3.jpg", rolloverSound=self.SFXstapler, pos=(0.6, 0, 0.5),
+                                         clickSound=self.SFXpling, relief=None)
+        stage3Button = DirectButton(parent=self.stageSelectFrame, text="Stage3", text_scale=(0.5), text_pos=(0,1.2,0), text_fg=(0,0,0.8,1), image = "Resources/Images/stage3.jpg", rolloverSound=self.SFXstapler, pos=(0.6, 0, 0.5),
                                   scale=.25,
-                                  command=self.stage3Button, clickSound=self.SFXpling)
+                                  command=self.stage3Button, clickSound=self.SFXpling, relief=None)
         backButton = DirectButton(parent=self.stageSelectFrame, text="Back", rolloverSound=self.SFXstapler, pos=(0, 0, 0),
                                   scale=.1,
                                   command=self.backButton, clickSound=self.SFXpling)
         self.stageSelectFrame.hide()
+
+    def tasteTheRainbowCheck(self, status):
+        if(status):
+            self.tasteTheRainbow = True
+        else:
+            self.tasteTheRainbow = False
 
     def gameStartButton(self, stage=""):
         self.startUp(stage = stage)
@@ -624,12 +632,14 @@ class CharacterController(ShowBase):
         self.SFXgameover = self.loadSfx("Resources/Sound/Game Over.mp3")
         self.SFXpling = self.loadSfx("Resources/Sound/Pling.mp3")
         self.SFXstapler = self.loadSfx("Resources/Sound/stapler.mp3")
+        self.SFXlanding = self.loadSfx("Resources/Sound/Landing.mp3")
         self.SFXfootstep.setVolume(0.3)
         self.SFXjump.setVolume(0.05)
         self.SFXdashjump.setVolume(0.05)
         self.SFXcheckpoint.setVolume(0.3)
         self.SFXpling.setVolume(0.05)
         self.SFXstapler.setVolume(0.05)
+        self.SFXlanding.setVolume(0.05)
 
         #voice
         self.SFXballoons = self.loadSfx("Resources/Voice/balloons.wav")
@@ -863,7 +873,7 @@ class CharacterController(ShowBase):
             #elif inputState.isSet('dash') and inputState.isSet('forward'):
         '''
         #idle
-        if (inputState.isSet('forward') is False) and (inputState.isSet('reverse') is False) and self.character.isOnGround() and self.animationIdle is False and self.isLanding is False:
+        if (inputState.isSet('forward') is False) and (inputState.isSet('reverse') is False) and self.character.isOnGround() and self.animationIdle is False and self.isLanding is False and self.actorNP.getCurrentAnim() != 'land':
             self.actorNP.loop('idle')
             self.SFXfootstep.stop()
             self.animationIdle = True
@@ -874,15 +884,32 @@ class CharacterController(ShowBase):
             self.isLanding = True
         if self.character.isOnGround() and self.animationLanding is False and self.isLanding:
             self.animationLanding = True
-            taskMgr.add(self.landingAnimationTask, 'LandingAnimation')
+            #taskMgr.add(self.landingAnimationTask, 'LandingAnimation')
             self.SFXfootstep.stop()
-        #dashing and running on ground
 
+            self.actorNP.play('land')
+            self.SFXlanding.play()
+            self.landingAnimation = True
+            self.animationIdle = False
+            self.animationRunning = False
+            self.animationDashing = False
+        if self.actorNP.getCurrentAnim() != 'land' and self.character.isOnGround():
+            self.isLanding = False
+            self.animationLanding = False
+        #dashing and running on ground
+        if self.character.isOnGround() is False and self.actorNP.getCurrentAnim() != "land" and self.actorNP.getCurrentAnim() != "jump":
+            self.actorNP.pose('land', 0.1)
+            if self.SFXfootstep.status() == self.SFXfootstep.PLAYING:
+                self.SFXfootstep.stop()
+        if inputState.isSet('dashJump') and self.actorNP.getCurrentAnim() != 'land':
+            self.doJump()
         if (inputState.isSet("forward") or inputState.isSet('reverse')):
             if inputState.isSet('dash'):
                 if self.character.isOnGround():
                     speed.setY(speedForce * 2)
-                if self.animationDashing is False and self.character.isOnGround() and self.isLanding is False:
+                if self.isLanding:
+                    speed.setY(speedForce * 2)
+                if self.animationDashing is False and self.character.isOnGround() and self.isLanding is False and self.actorNP.getCurrentAnim() != 'land':
                     self.SFXfootstep.setPlayRate(1.5)
                     self.playSfx(self.SFXfootstep, looping=1)
                     self.actorNP.setPlayRate(1.5, 'run')
@@ -892,14 +919,16 @@ class CharacterController(ShowBase):
                     self.animationRunning = False
                     self.animationIdle = False
                     self.isDashJumping = True
-                if inputState.isSet('dashJump') and self.isDashJumping:
+                if inputState.isSet('dashJump') and self.isDashJumping and self.actorNP.getCurrentAnim() != 'land':
                     speed.setY(speedForce * 2)
                     self.doJump()
             else:
+                if inputState.isSet('dashJump') and self.actorNP.getCurrentAnim() != 'land':
+                    self.doJump()
                 self.isDashJumping = False
                 speed.setY(speedForce)
                 self.actorNP.setPlayRate(1, 'run')
-                if self.animationRunning is False and self.character.isOnGround() and self.isLanding is False:
+                if self.animationRunning is False and self.character.isOnGround() and self.isLanding is False and self.actorNP.getCurrentAnim() != 'land':
                     self.actorNP.loop('run')
                     self.SFXfootstep.setPlayRate(1)
                     self.playSfx(self.SFXfootstep, looping=1)
@@ -1292,6 +1321,10 @@ class CharacterController(ShowBase):
             boxModelNP.setColorScale(0.3, 0.3, 1, 1)
         elif color == "teal":
             boxModelNP.setColorScale(0, 0.6, 0.7, 1)
+
+        if self.tasteTheRainbow:
+            boxModelNP.setColorScale(random.random(), random.random(), random.random(), 1)
+
         return boxNP
         # boxNP.node().removeAllChildren()
         # self.world.removeRigidBody(boxNP.node())
@@ -1695,14 +1728,14 @@ class CharacterController(ShowBase):
         return task.cont
 
     def peteWalkOutCell(self, task):
-        if task.time > 12:
+        if task.time > 10:
             self.pete.setLinearMovement(Vec3(0,0,0), True)
             self.peteInteractions["doorDestroyed"] = False
             taskMgr.add(self.peteThirdTask, 'petethirdTask')
             return task.done
         elif task.time < 4:
             self.peteActorNP.setHpr(180, 0, 0)
-            self.pete.setLinearMovement(Vec3(0, 0.5, 0), True)
+            self.pete.setLinearMovement(Vec3(0, 0.7, 0), True)
         return task.cont
 
     def peteStage1FirstDialogue(self, task):
@@ -1742,7 +1775,7 @@ class CharacterController(ShowBase):
             self.playSfx(self.SFXacknowledged)
             self.peteInteractionsDialogueSwitches["switch2"] = True
             self.textMessageClear()
-            self.textMessageSpeak(text + "Try looking around, you can move your camera with the arrow keys.", line2="You can hold down [W] [SHIFT] [SPACE] to jump further.")
+            self.textMessageSpeak(text + "Try looking around, you can move your camera with the arrow keys.", line2="You can hold down [SHIFT] to jump further.")
         if task.time > 20 and self.peteInteractionsDialogueSwitches["switch3"] is False:
             self.peteInteractionsDialogueSwitches["switch3"] = True
             self.textMessageClear()
@@ -2934,10 +2967,12 @@ class CharacterController(ShowBase):
         if self.startFromStageOne:
             self.setUpStage1()
             self.setUpTransition()
+            self.setUpTransition2()
             self.playMusic(self.BGM1, looping=1, volume=0.1)
         elif self.startFromStageTwo:
             self.setUpStage1()
             self.setUpTransition()
+            self.setUpTransition2()
             self.playMusic(self.BGM1, looping=1, volume=0.1)
         elif self.startFromStageThree:
             self.setUpTransition2()
