@@ -898,7 +898,7 @@ class CharacterController(ShowBase):
             self.animationLanding = False
         #dashing and running on ground
         if self.character.isOnGround() is False and self.actorNP.getCurrentAnim() != "land" and self.actorNP.getCurrentAnim() != "jump":
-            self.actorNP.pose('land', 0.1)
+            self.actorNP.pose('land', 1)
             if self.SFXfootstep.status() == self.SFXfootstep.PLAYING:
                 self.SFXfootstep.stop()
         if inputState.isSet('dashJump') and self.actorNP.getCurrentAnim() != 'land':
